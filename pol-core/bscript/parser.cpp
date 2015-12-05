@@ -101,6 +101,7 @@ namespace Pol {
 	  "Waaah!",
 	  "Unterminated String Literal",
 	  "Invalid UTF8 String",
+	  "Invalid escape sequence in String",
 	  "Too Few Arguments",
 	  "Too Many Arguments",
 	  "Unexpected Comma",
@@ -1139,6 +1140,10 @@ namespace Pol {
 		Utf8String lit;
 		bool escnext = false;
 		u8 utf8next = 0;
+		u8 hexnext = 0;
+		char hexstr[3];
+		memset( hexstr, 0, 3 );
+
 		for ( ;; )
 		{
 		  if ( !*end )
@@ -1147,16 +1152,44 @@ namespace Pol {
 			return -1;
 		  }
 
-		  assert( ! (escnext && utf8next) );
+		  assert( ! ( (escnext && utf8next) || ( utf8next && hexnext) || ( escnext && hexnext ) ) );
 		  if ( escnext )
 		  {
+			// waiting for 2nd character after an escape sequence
 			escnext = false;
 			if ( *end == 'n' )
 			  lit += '\n';
 			else if ( *end == 't' )
 			  lit += '\t';
+			else if ( *end == 'x' )
+			  hexnext = 2;
 			else
 			  lit += *end;
+		  }
+		  else if ( hexnext )
+		  {
+			// waiting for next (two) chars in hex escape sequence (eg. \xFF)
+			hexstr[2-hexnext] = *end;
+			hexnext--;
+			if( hexnext == 0 )
+			{
+			  char* endptr;
+			  u8 ord = static_cast<u8>(strtol(hexstr, &endptr, 16));
+			  if( *endptr != '\0' )
+			  {
+				err = PERR_INVESCAPE;
+				return -1;
+			  }
+			  //Create utf8 from ord
+			  //TODO: move this into a function
+			  if( ord < 0x80 )
+				lit += ord;
+			  else
+			  {
+				lit += 0xC0 | ( ord >> 6 ); // first byte: 110XXXXX
+				lit += 0x80 | ( ord & 0x3f ); // second byte: 10XXXXXX
+			  }
+			}
 		  }
 		  else if ( utf8next )
 		  {

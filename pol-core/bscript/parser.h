@@ -42,6 +42,7 @@ namespace Pol {
 	  PERR_WAAH,         // god knows what happened
 	  PERR_UNTERMSTRING, // "abcd  (not terminated with '"')
 	  PERR_INVUTF8STR,   // an invalid utf8 string
+	  PERR_INVESCAPE,    // an invalid escape sequence (eg. \xFG)
 	  PERR_TOOFEWARGS,
 	  PERR_TOOMANYARGS,
 	  PERR_UNEXPCOMMA,
