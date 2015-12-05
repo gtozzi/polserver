@@ -41,6 +41,7 @@ namespace Pol {
 	  PERR_BADOPER,      // unknown operator..
 	  PERR_WAAH,         // god knows what happened
 	  PERR_UNTERMSTRING, // "abcd  (not terminated with '"')
+	  PERR_INVUTF8STR,   // an invalid utf8 string
 	  PERR_TOOFEWARGS,
 	  PERR_TOOMANYARGS,
 	  PERR_UNEXPCOMMA,
@@ -106,6 +107,8 @@ namespace Pol {
 	  char buffer[51];
 
 	  bool contains_tabs;
+	  // Just renaming string, to point out that the content is (supposed to be) in utf8
+	  typedef std::string Utf8String;
 	public:
 	public:
 	  void reinit( Expression& ex );

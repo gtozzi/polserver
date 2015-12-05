@@ -100,6 +100,7 @@ namespace Pol {
 	  "Unknown Operator",
 	  "Waaah!",
 	  "Unterminated String Literal",
+	  "Invalid UTF8 String",
 	  "Too Few Arguments",
 	  "Too Many Arguments",
 	  "Unexpected Comma",
@@ -1123,13 +1124,21 @@ namespace Pol {
 	  return 0; // not numeric
 	}
 
+	/**
+	* Tries to read a literal (string/variable name) from context
+	*
+	* @param tok Token&: The token to store the found literal into
+	* @param ctx CompilerContext&: The context to look into
+	* @return 0 when no matching text is found, 1 on success, -1 on error (also sets err)
+	*/
 	int Parser::tryLiteral( Token& tok, CompilerContext& ctx )
 	{
 	  if ( ctx.s[0] == '\"' )
 	  {
 		const char* end = &ctx.s[1];
-        std::string lit;
+		Utf8String lit;
 		bool escnext = false;
+		u8 utf8next = 0;
 		for ( ;; )
 		{
 		  if ( !*end )
@@ -1137,6 +1146,8 @@ namespace Pol {
 			err = PERR_UNTERMSTRING;
 			return -1;
 		  }
+
+		  assert( ! (escnext && utf8next) );
 		  if ( escnext )
 		  {
 			escnext = false;
@@ -1147,12 +1158,42 @@ namespace Pol {
 			else
 			  lit += *end;
 		  }
+		  else if ( utf8next )
+		  {
+			// waiting for next byte in a multibyte char, it must be 10XXXXXX
+			if( ( *end & 0xC0 ) != 0x80 )
+			{
+			  err = PERR_INVUTF8STR;
+			  return -1;
+			}
+			utf8next--;
+			lit += *end;
+		  }
 		  else
 		  {
 			if ( *end == '\\' )
 			  escnext = true;
 			else if ( *end == '\"' )
 			  break;
+			else if ( *end & 0x80 )
+			{
+			  // this is the first byte of a multibyte utf8 char
+			  // number of most significant bits set to 1 tells how many bytes is the
+			  // character composed in total (first byte is this one)
+			  for( u8 i = 6; i >= 0; i-- )
+			  {
+				if( *end & ( 1 << i ) )
+				  utf8next++;
+				else
+				  break;
+			  }
+			  if( utf8next < 1 || utf8next > 3 )
+			  {
+				err = PERR_INVUTF8STR;
+				return -1;
+			  }
+			  lit += *end;
+			}
 			else
 			  lit += *end;
 		  }
