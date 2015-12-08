@@ -39,6 +39,8 @@ namespace Pol {
 #define ESCRIPT_FILE_VER_000A		0x000A
 #define ESCRIPT_FILE_VER_000B		0x000B
 #define ESCRIPT_FILE_VER_000C		0x000C
+// 12-08-2015 Bodom, POL099, introduced native unicode support, strings are now ut8
+#define ESCRIPT_FILE_VER_000D		0x000D
 
 	/*
 		NOTE: Update ESCRIPT_FILE_VER_CURRENT when you make a
@@ -46,7 +48,7 @@ namespace Pol {
 		and report this to users when an older compiled version
 		is attempted to be executed - TJ
 		*/
-#define ESCRIPT_FILE_VER_CURRENT	(ESCRIPT_FILE_VER_000C)
+#define ESCRIPT_FILE_VER_CURRENT	(ESCRIPT_FILE_VER_000D)
 
 	struct BSCRIPT_FILE_HDR
 	{
