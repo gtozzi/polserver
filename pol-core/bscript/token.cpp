@@ -63,6 +63,9 @@ namespace Pol {
 #endif
 	}
 
+	/**
+	 * Initializes an empty token
+	 */
 	Token::Token() :
 	  id( TOK_TERM ),
 	  type( TYP_TERMINATOR ),
@@ -73,13 +76,15 @@ namespace Pol {
 	  lval( 0 ),
 	  userfunc( NULL ),
 	  deprecated( false ),
-      ownsStr( false ),
 	  module( Mod_Basic ),
-	  token( NULL )
+	  token()
 	{
 	  register_instance();
 	}
 
+	/**
+	 * Initializes a token copying data from a given one
+	 */
 	Token::Token( const Token& tok ) :
 	  id( tok.id ),
 	  type( tok.type ),
@@ -90,20 +95,15 @@ namespace Pol {
 	  lval( tok.lval ),
 	  userfunc( tok.userfunc ),
 	  deprecated( tok.deprecated ),
-      ownsStr( false ),
 	  module( tok.module ),
-	  token( NULL )
+	  token( tok.token )
 	{
 	  register_instance();
-	  if ( tok.token )
-	  {
-		if ( !tok.ownsStr )
-		  setStr( tok.token );
-		else
-		  copyStr( tok.token );
-	  }
 	}
 
+	/**
+	 * Assigns the values from a given token to this one
+	 */
 	Token& Token::operator=( const Token& tok )
 	{
 	  module = tok.module;
@@ -113,14 +113,7 @@ namespace Pol {
 	  deprecated = tok.deprecated;
 
 	  nulStr();
-      ownsStr = false;
-	  if ( tok.token )
-	  {
-		if ( !tok.ownsStr )
-		  setStr( tok.token );
-		else
-		  copyStr( tok.token );
-	  }
+	  copyStr( tok.token );
 	  dval = tok.dval;
 	  lval = tok.lval;
 
@@ -144,9 +137,8 @@ namespace Pol {
 				  lval( 0 ),
 				  userfunc( NULL ),
 				  deprecated( false ),
-                  ownsStr( false ),
 				  module( static_cast<unsigned char>( i_module ) ),
-				  token( NULL )
+				  token()
 	{
 	  register_instance();
 	}
@@ -162,9 +154,8 @@ namespace Pol {
 				  lval( 0 ),
 				  userfunc( NULL ),
 				  deprecated( false ),
-                  ownsStr( false ),
 				  module( Mod_Basic ),
-				  token( NULL )
+				  token()
 	{
 	  register_instance();
 	}
@@ -182,47 +173,28 @@ namespace Pol {
 				  lval( 0 ),
 				  userfunc( i_userfunc ),
 				  deprecated( false ),
-                  ownsStr( false ),
 				  module( static_cast<unsigned char>( i_module ) ),
-				  token( NULL )
+				  token()
 	{
 	  register_instance();
 	}
 
+	/**
+	 * Erases all the content from the Unicode, that becomes empty
+	 */
 	void Token::nulStr()
 	{
-	  if ( token && ownsStr )
-	  {
-		char *tmp = (char *)token;
-		delete[] tmp;
-	  }
-	  token = NULL;
+	  token.clear();
 	}
 
-	void Token::setStr( const char *s )
+	/**
+	 * Copies value form the given Unicode into token's Unicode, replacing its current conrent
+	 */
+	void Token::copyStr( const Unicode& s )
 	{
-	  nulStr();
-      ownsStr = false;
-	  token = s;
+	  token.assign(s);
 	}
-
-	void Token::copyStr( const char *s )
-	{
-	  nulStr();
-	  ownsStr = true;
-	  size_t len = strlen( s );
-	  auto tmp = new char[len + 1];
-	  if ( tmp )
-	  {
-		memcpy( tmp, s, len + 1 );
-		token = tmp;
-	  }
-	  else
-	  {
-		token = NULL;
-	  }
-	}
-
+/*
 	void Token::copyStr( const char *s, int len )
 	{
 	  nulStr();
@@ -239,6 +211,7 @@ namespace Pol {
 		token = NULL;
 	  }
 	}
+*/
 
 
 	Token::~Token()

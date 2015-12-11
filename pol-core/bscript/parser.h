@@ -108,36 +108,37 @@ namespace Pol {
 	  char buffer[51];
 
 	  bool contains_tabs;
-	  // Just renaming string, to point out that the content is (supposed to be) in utf8
-	  typedef std::string Utf8String;
-	public:
-	public:
+
+	protected:
 	  void reinit( Expression& ex );
 
 	  static void write_words( std::ostream& os );
 	  virtual int recognize_binary( Token& tok, const char *buf, const char **s );
 	  virtual int recognize_unary( Token& tok, const char *buf );
 	  virtual int recognize( Token& tok, const char *buf, const char **s );
-	  virtual bool recognize_reserved_word( Token& tok, const char *buf );
+	  virtual bool recognize_reserved_word( Token& tok );
 
 	  virtual int tryOperator( Token& tok,
-							   const char *buf, const char **s,
-							   Operator *opList, int n_ops,
-							   char *opbuf );
+							   CompilerContext& ctx,
+							   Operator *opList, int n_ops);
 	  virtual int tryBinaryOperator( Token& tok, CompilerContext& ctx );
 	  virtual int tryUnaryOperator( Token& tok, CompilerContext& ctx );
 
 	  virtual int tryNumeric( Token& tok, CompilerContext& ctx );
 	  virtual int tryLiteral( Token& tok, CompilerContext& ctx );
 
-	  virtual int peekToken( const CompilerContext& ctx, Token& token, Expression* expr = NULL );
-	  virtual int getToken( CompilerContext& ctx, Token& token, Expression* expr = NULL );
+	public: 
+	  virtual int peekToken( const CompilerContext& ctx, Token& token );
+	  virtual int getToken( CompilerContext& ctx, Token& token, Expression* pexpr = nullptr );
 
 
 	  virtual int parseToken( CompilerContext& ctx, Expression& expr, Token *token ) = 0;
 	  int IP( Expression& expr, char *s );
 
 	  void setQuiet( int x ) { quiet = x; }
+
+	protected:
+	  bool isIdentAllowed(const UnicodeChar& c) const;
 	};
 
 
@@ -164,7 +165,7 @@ namespace Pol {
       virtual int isUserFunc(Token& tok, UserFunction **userfunc);
 
 	  virtual int parseToken( CompilerContext& ctx, Expression& expr, Token * ) POL_OVERRIDE;
-	  int getToken( CompilerContext& ctx, Token& token, Expression* expr = NULL );
+	  int getToken( CompilerContext& ctx, Token& token, Expression* pexpr = nullptr );
 
 	  bool callingMethod( CompilerContext& ctx );
 

@@ -315,9 +315,8 @@ namespace Pol {
 		case TOK_ADD:
 		{
 					  ntoken = new Token( *left );
-					  std::string combined;
-					  combined = std::string( left->tokval() ) + std::string( right->tokval() );
-					  ntoken->copyStr( combined.c_str() );
+					  Unicode combined = Unicode(*left->tokval()) + Unicode(*right->tokval());
+					  ntoken->copyStr( combined );
 		}
 		  break;
 
@@ -656,7 +655,7 @@ namespace Pol {
 		Token* operand = tokens[i - 1];
 		if ( operand->id == TOK_STRING /*|| operand->id == INS_CALL_METHOD*/ )
 		{
-		  ObjMember* objmemb = getKnownObjMember( operand->tokval() );
+		  ObjMember* objmemb = getKnownObjMember( operand->tokval()->asAnsi(true).c_str() );
 		  if ( objmemb != NULL && compilercfg.OptimizeObjectMembers )
 		  {
 			// merge the member name with the member operator.
@@ -873,12 +872,6 @@ namespace Pol {
 
 	Compiler::~Compiler()
 	{
-	  while ( !delete_these_arrays.empty() )
-	  {
-		char* s = delete_these_arrays.back();
-		delete[] s;
-		delete_these_arrays.pop_back();
-	  }
 	}
 
 
@@ -919,7 +912,7 @@ namespace Pol {
 		if ( verbosity_level_ >= 5 )
 		{
           INFO_PRINT << "Warning! possible incorrect assignment.\n"
-            << "Near: " << curLine << "\n";
+            << "Near: " << curLine.asAnsi(true) << "\n";
 		  if ( compilercfg.ErrorOnWarning )
 			throw std::runtime_error( "Warnings treated as errors." );
 		}
@@ -943,21 +936,21 @@ namespace Pol {
 	  std::string modulename;
 	  std::string funcname;
 
-	  if ( const char *colon = strchr( token.tokval(), ':' ) )
+	  if ( auto colon = token.tokval()->find(':') )
 	  {
-        std::string tmp(token.tokval(), colon);
+		Unicode tmp = token.tokval()->substr(0, colon);
 		if ( tmp.length() >= 9 )
 		{
-          INFO_PRINT << "'" << tmp << "' is too long to be a module name.\n";
+          INFO_PRINT << "'" << tmp.asAnsi(true) << "' is too long to be a module name.\n";
 		  return -1;
 		}
-		modulename = tmp;
-		funcname = std::string( colon + 2 );
+		modulename = tmp.asAnsi(true);
+		funcname = token.tokval()->substr(colon+2).asAnsi(true);
 	  }
 	  else
 	  {
 		modulename = "";
-		funcname = token.tokval();
+		funcname = token.tokval()->asAnsi(true);
 	  }
 
 	  for ( unsigned i = 0; i < program->modules.size(); i++ )
@@ -1013,7 +1006,7 @@ namespace Pol {
 	  if ( token.id != TOK_IDENT ) return 0;
 	  passert( token.tokval() );
 
-	  auto itr = userFunctions.find( token.tokval() );
+	  auto itr = userFunctions.find( token.tokval()->asAnsi(true) );
 	  if ( itr != userFunctions.end() )
 	  {
 		token.module = Mod_Basic;
@@ -1496,7 +1489,7 @@ namespace Pol {
 		  if ( tk2.id == TOK_ASSIGN )
 		  {
 			any_named = 1;
-			varname = tk.tokval();
+			varname = tk.tokval()->asAnsi(true);
 			ctx = tctx; /* skip past the 'variable :=' part */
 		  }
 		  else if ( tk2.id == TOK_EQUAL1 )
@@ -1620,12 +1613,12 @@ namespace Pol {
 		if ( tkn->id == TOK_IDENT )
 		{
 		  unsigned idx;
-		  if ( localscope.varexists( tkn->tokval(), idx ) )
+		  if ( localscope.varexists( tkn->tokval()->asAnsi(true), idx ) )
 		  {
 			tkn->id = TOK_LOCALVAR;
 			tkn->lval = idx;
 		  }
-		  else if ( globalexists( tkn->tokval(), idx ) )
+		  else if ( globalexists( tkn->tokval()->asAnsi(true), idx ) )
 		  {
 			tkn->id = TOK_GLOBALVAR;
 			tkn->lval = idx;
@@ -1643,9 +1636,9 @@ namespace Pol {
 
 		if ( tkn->id == TOK_IDENT )
 		{
-		  if ( !varexists( tkn->tokval() ) )
+		  if ( !varexists( tkn->tokval()->asAnsi(true) ) )
 		  {
-            INFO_PRINT << "Variable " << tkn->tokval() << " has not been declared"
+            INFO_PRINT << "Variable " << tkn->tokval()->asAnsi(true) << " has not been declared"
               << " on line " << ctx.line
               << ".\n";
 			return -1;
@@ -1662,7 +1655,7 @@ namespace Pol {
 		{
           INFO_PRINT << "Warning: Found deprecated "
 			<< ( tkn->type == TYP_OPERATOR ? "operator " : "token " )
-			<< "'" << tkn->tokval() << "'"
+			<< "'" << tkn->tokval()->asAnsi(true) << "'"
 			<< " on line " << ctx.line
 			<< " of " << ctx.filename << "\n";
 		  // warning only; doesn't bail out.
@@ -1700,7 +1693,7 @@ namespace Pol {
 
 	bool Compiler::substitute_constant( Token* tkn ) const
 	{
-	  auto srch = constants.find( tkn->tokval() );
+	  auto srch = constants.find( tkn->tokval()->asAnsi(true) );
 	  if ( srch != constants.end() )
 	  {
 		int dbg_filenum = tkn->dbg_filenum;
@@ -1983,8 +1976,7 @@ namespace Pol {
 				it isn't tricky.
 				The complication is that sometimes a label is actually a constant.
 				*/
-			if ( token.id == CTRL_LABEL &&
-				 stricmp( token.tokval(), "default" ) == 0 )
+			if ( token.id == CTRL_LABEL && token.tokval()->compare("default") == 0 )
 			{
 			  getToken( ctx, token );
 			  if ( default_posn != 0 )
@@ -2044,7 +2036,7 @@ namespace Pol {
 			}
 			else if ( token.id == CTRL_LABEL || token.id == TOK_STRING )
 			{
-			  if ( strlen( token.tokval() ) >= 254 )
+			  if ( token.tokval()->length() >= 254 )
 			  {
                 INFO_PRINT << "String expressions in CASE statements must be <= 253 characters.\n";
 				return -1;;
@@ -2053,8 +2045,8 @@ namespace Pol {
 			  unsigned char* tmppch = reinterpret_cast<unsigned char*>( &offset );
 			  caseblock.push_back( tmppch[0] );
 			  caseblock.push_back( tmppch[1] );
-			  caseblock.push_back( static_cast<unsigned char>( strlen( token.tokval() ) ) );
-			  const char* str = token.tokval();
+			  caseblock.push_back( static_cast<unsigned char>( token.tokval()->length() ) );
+			  const char* str = token.tokval()->asAnsi(true).c_str();
 			  size_t len = strlen( str );
 
 			  for ( size_t i = 0; i < len; ++i )
@@ -2078,7 +2070,7 @@ namespace Pol {
 
 		// we've grabbed the OPTIONs.  Now grab the code, until we get to an OPTION or ENDCASE
 		enterblock( CanBeLabelled, BreakOk, ContinueNotOk );
-		while ( ctx.s[0] )
+		while ( ctx.cursor != ctx.s.end() )
 		{
 		  Token token;
 		  res = peekToken( ctx, token );
@@ -2100,7 +2092,7 @@ namespace Pol {
 		  }
 		  else if ( token.id == CTRL_LABEL )
 		  {
-			if ( stricmp( token.tokval(), "default" ) == 0 )
+			if ( token.tokval()->compare("default") == 0 )
 			  break;
 
 			substitute_constant( &token );
@@ -2117,7 +2109,7 @@ namespace Pol {
 		  if ( !anycases )
 		  {
             INFO_PRINT << "CASE statement with no options!\n"
-              << "Found '" << token.tokval() << "'" << (
+              << "Found '" << token.tokval()->asAnsi(true) << "'" << (
               token.id == CTRL_LABEL ?
               " but no such constant is defined.\n" :
               " prematurely.\n" );
@@ -2151,7 +2143,7 @@ namespace Pol {
 	  if ( onlydefault && ( compilercfg.DisplayWarnings || compilercfg.ErrorOnWarning ) )
 	  {
         INFO_PRINT << "Warning: CASE block only has a DEFAULT clause defined.\n"
-		 << "near: " << curLine << "\n";
+		 << "near: " << curLine.asAnsi(true) << "\n";
 		if ( compilercfg.ErrorOnWarning )
 		  throw std::runtime_error( "Warnings treated as errors." );
 		else
@@ -2232,12 +2224,12 @@ namespace Pol {
 		  INITFOREACH creates three local variables, placeholders for the iterator,
 		  expression, and counter.  Only the iterator can be accessed, for now.
 		  */
-	  program->addlocalvar( itrvar.tokval() );
-	  localscope.addvar( itrvar.tokval(), foreach_ctx );
-	  program->addlocalvar( "_" + std::string( itrvar.tokval() ) + "_expr" );
-	  localscope.addvar( "_" + std::string( itrvar.tokval() ) + "_expr", foreach_ctx, false );
-	  program->addlocalvar( "_" + std::string( itrvar.tokval() ) + "_counter" );
-	  localscope.addvar( "_" + std::string( itrvar.tokval() ) + "_iter", foreach_ctx, false );
+	  program->addlocalvar( itrvar.tokval()->asAnsi(true) );
+	  localscope.addvar( itrvar.tokval()->asAnsi(true), foreach_ctx );
+	  program->addlocalvar( "_" + itrvar.tokval()->asAnsi(true) + "_expr" );
+	  localscope.addvar( "_" + itrvar.tokval()->asAnsi(true) + "_expr", foreach_ctx, false );
+	  program->addlocalvar( "_" + itrvar.tokval()->asAnsi(true) + "_counter" );
+	  localscope.addvar( "_" + itrvar.tokval()->asAnsi(true) + "_iter", foreach_ctx, false );
 
 
 	  unsigned iter_posn = program->tokens.next();
@@ -2320,14 +2312,14 @@ namespace Pol {
 
 	  enterblock( CanNotBeLabelled );
 
-	  while ( ctx.s[0] )
+	  while ( ctx.cursor != ctx.s.end() )
 	  {
 		peekToken( ctx, token );
 		if ( token.id == RSV_ENDB ) break;
 
 		if ( getStatement( ctx, level ) == -1 ) return -1;
 	  }
-	  if ( !ctx.s[0] ) return -1;
+	  if ( ctx.cursor == ctx.s.end() ) return -1;
 
 	  getToken( ctx, token );
 	  if ( token.id != RSV_ENDB )
@@ -2360,21 +2352,21 @@ namespace Pol {
 		{
 		  if ( funcName.id == TOK_FUNC )
 		  {
-            INFO_PRINT << "'" << funcName.tokval() << "' is already defined as a function.\n"
-              << "Near: " << curLine << "\n"
+            INFO_PRINT << "'" << funcName.tokval()->asAnsi(true) << "' is already defined as a function.\n"
+              << "Near: " << curLine.asAnsi(true) << "\n"
               << ctx;
 			return -1;
 		  }
 		  else
 		  {
             INFO_PRINT << "Expected an identifier, got " << funcName << " instead.\n"
-              << "Near: " << curLine << "\n"
+              << "Near: " << curLine.asAnsi(true) << "\n"
               << ctx;
 			return -1;
 		  }
 		}
 	  }
-	  userfunc.name = funcName.tokval();
+	  userfunc.name = funcName.tokval()->asAnsi(true);
 	  Token lparen;
 	  res = getToken( ctx, lparen );
 	  if ( res ) return res;
@@ -2415,7 +2407,7 @@ namespace Pol {
 		}
 		userfunc.parameters.resize( userfunc.parameters.size() + 1 );
 		UserParam& param = userfunc.parameters.back();
-		param.name = token.tokval();
+		param.name = token.tokval()->asAnsi(true);
 		param.pass_by_reference = pass_by_reference;
 		param.unused = unused;
 		peekToken( ctx, token );
@@ -2447,7 +2439,7 @@ namespace Pol {
 		  param.dflt_value = *( ex.tokens.back() );
 		  if ( param.dflt_value.type != TYP_OPERAND )
 		  {
-            INFO_PRINT << "[" << funcName.tokval() << "]: Only simple operands are allowed as default arguments (" << token << " is not allowed)\n";
+            INFO_PRINT << "[" << funcName.tokval()->asAnsi(true) << "]: Only simple operands are allowed as default arguments (" << token << " is not allowed)\n";
 			return -1;
 		  }
 		  peekToken( ctx, token );
@@ -2535,7 +2527,7 @@ namespace Pol {
 		err = PERR_MISSINGDELIM;
 		return -1;
 	  }
-      INFO_PRINT << "func decl: " << curLine << "\n"
+      INFO_PRINT << "func decl: " << curLine.asAnsi(true) << "\n"
         << "nParams: " << nParams << "\n";
 	  //addUserFunc(funcName.tokval(), nParams);
 	  return 0;
@@ -2710,7 +2702,7 @@ namespace Pol {
 		//dump(cout);
 		// get the part we do
 		enterblock( CanNotBeLabelled );
-		while ( ctx.s[0] )
+		while ( ctx.cursor != ctx.s.end() )
 		{
 		  peekToken( ctx, token );
 		  if ( token.id == RSV_ELSEIF || token.id == RSV_ELSE || token.id == RSV_ENDIF )
@@ -2728,7 +2720,7 @@ namespace Pol {
 		  }
 		}
 		leaveblock( 0, 0 );
-		if ( !ctx.s[0] ) return -1;
+		if ( ctx.cursor == ctx.s.end() ) return -1;
 
 		//dump(cout);
 		if ( !discard_this )
@@ -2797,7 +2789,7 @@ namespace Pol {
 		getToken( ctx, token );  // eat the else
         if ( !quiet ) INFO_PRINT << "else clause..\n";
 		enterblock( CanNotBeLabelled );
-		while ( ctx.s[0] )
+		while ( ctx.cursor != ctx.s.end() )
 		{
 		  peekToken( ctx, token );
 		  if ( token.id == RSV_ENDIF )
@@ -2812,7 +2804,7 @@ namespace Pol {
 		leaveblock( 0, 0 );
 	  }
 	  // eat the ENDIF
-	  if ( !ctx.s[0] ) return -1;
+	  if ( ctx.cursor == ctx.s.end() ) return -1;
 	  getToken( ctx, token );
 	  if ( token.id != RSV_ENDIF ) return -1;
 
@@ -2847,7 +2839,7 @@ namespace Pol {
 	{
 	  CompilerContext tctx( ctx );
 	  int res;
-	  while ( ctx.s[0] )
+	  while ( ctx.cursor != ctx.s.end() )
 	  {
 		Token token;
 		res = peekToken( ctx, token );
@@ -2955,14 +2947,14 @@ namespace Pol {
 		getToken( ctx, tk_varname );
 		if ( tk_varname.id != TOK_IDENT )
 		{
-          INFO_PRINT << "Non-identifier declared as a variable: '" << tk_varname.tokval() << "'\n"
+          INFO_PRINT << "Non-identifier declared as a variable: '" << tk_varname.tokval()->asAnsi(true) << "'\n"
             << "Token: " << tk_varname << "\n";
 		  return -1;
 		}
 
-		if ( constants.find( tk_varname.tokval() ) != constants.end() )
+		if ( constants.find( tk_varname.tokval()->asAnsi(true) ) != constants.end() )
 		{
-          INFO_PRINT << tk_varname.tokval() << " is already a defined constant.\n";
+          INFO_PRINT << tk_varname.tokval()->asAnsi(true) << " is already a defined constant.\n";
 		  return -1;
 		}
 
@@ -2973,29 +2965,29 @@ namespace Pol {
 		{
 		  unsigned idx;
 		  CompilerContext gctx;
-		  if ( !globalexists( tk_varname.tokval(), idx, &gctx ) )
+		  if ( !globalexists( tk_varname.tokval()->asAnsi(true), idx, &gctx ) )
 		  {
 			Variable v;
-			v.name = tk_varname.tokval();
+			v.name = tk_varname.tokval()->asAnsi(true);
 			v.used = true;
 			v.ctx = savectx;
 
 			varindex = static_cast<unsigned>( globals_.size() );
 			globals_.push_back( v );
-			program->globalvarnames.push_back( tk_varname.tokval() );
+			program->globalvarnames.push_back( tk_varname.tokval()->asAnsi(true) );
 		  }
 		  else
 		  {
-            INFO_PRINT << "Global Variable '" << tk_varname.tokval( ) << "' is already declared at " << gctx;
+            INFO_PRINT << "Global Variable '" << tk_varname.tokval( )->asAnsi(true) << "' is already declared at " << gctx;
 			return -1;
 		  }
 		}
 		else
 		{
 		  unsigned idx;
-		  if ( ( compilercfg.DisplayWarnings || compilercfg.ErrorOnWarning ) && globalexists( tk_varname.tokval(), idx ) )
+		  if ( ( compilercfg.DisplayWarnings || compilercfg.ErrorOnWarning ) && globalexists( tk_varname.tokval()->asAnsi(true), idx ) )
 		  {
-            INFO_PRINT << "Warning: Local variable '" << tk_varname.tokval()
+            INFO_PRINT << "Warning: Local variable '" << tk_varname.tokval()->asAnsi(true)
               << "' hides Global variable of same name.\n";
 			if ( compilercfg.ErrorOnWarning )
 			  throw std::runtime_error( "Warnings treated as errors." );
@@ -3004,10 +2996,10 @@ namespace Pol {
 
 		  }
 		  varindex = localscope.numVariables();
-		  program->addlocalvar( tk_varname.tokval() );
+		  program->addlocalvar( tk_varname.tokval()->asAnsi(true) );
 
 		  varindex = localscope.numVarsInBlock();
-		  localscope.addvar( tk_varname.tokval(), ctx );
+		  localscope.addvar( tk_varname.tokval()->asAnsi(true), ctx );
 		}
 
 		// grab the comma, semicolon, := or array declare token
@@ -3093,7 +3085,7 @@ namespace Pol {
 		return -1;
 	  }
 
-	  if ( constants.count( tk_varname.tokval() ) )
+	  if ( constants.count( tk_varname.tokval()->asAnsi(true) ) )
 	  {
         INFO_PRINT << "Constant " << tk_varname << " has already been defined.\n";
 		return -1;
@@ -3120,7 +3112,7 @@ namespace Pol {
         return -1;
 	  }
 
-	  constants.insert( Constants::value_type( tk_varname.tokval(), *ex.tokens.back() ) );
+	  constants.insert( Constants::value_type( tk_varname.tokval()->asAnsi(true), *ex.tokens.back() ) );
 	  delete ex.tokens.back();
 	  ex.tokens.pop_back();
 
@@ -3204,7 +3196,7 @@ namespace Pol {
 			next_counter = tkn->lval + 1;
 		  else
 			++next_counter;
-		  constants.insert( Constants::value_type( tk_varname.tokval(), *tkn ) );
+		  constants.insert( Constants::value_type( tk_varname.tokval()->asAnsi(true), *tkn ) );
 		  delete tkn;
 		  ex.tokens.pop_back();
 		}
@@ -3213,13 +3205,13 @@ namespace Pol {
 		  getToken( ctx, tmp );
 		  Token tkn( TOK_LONG, TYP_OPERAND );
 		  tkn.lval = next_counter++;
-		  constants.insert( Constants::value_type( tk_varname.tokval(), tkn ) );
+		  constants.insert( Constants::value_type( tk_varname.tokval()->asAnsi(true), tkn ) );
 		}
 		else if ( tmp.id == RSV_ENDENUM )
 		{
 		  Token tkn( TOK_LONG, TYP_OPERAND );
 		  tkn.lval = next_counter++;
-		  constants.insert( Constants::value_type( tk_varname.tokval(), tkn ) );
+		  constants.insert( Constants::value_type( tk_varname.tokval()->asAnsi(true), tkn ) );
 		  // we'll pick this one up next pass
 		}
 		else if ( tmp.id == TOK_EQUAL1 )
@@ -3236,7 +3228,7 @@ namespace Pol {
 	}
 
 
-	int Compiler::useModule( const char *modulename )
+	int Compiler::useModule( const std::string &modulename )
 	{
 
 	  for ( const auto &elem : program->modules )
@@ -3245,7 +3237,7 @@ namespace Pol {
 		  return 0;
 	  }
 
-	  std::unique_ptr<FunctionalityModule> compmodl( new FunctionalityModule( modulename ) );
+	  std::unique_ptr<FunctionalityModule> compmodl( new FunctionalityModule( modulename.c_str() ) );
 
 	  std::string filename_part = modulename;
 	  filename_part += ".em";
@@ -3274,18 +3266,8 @@ namespace Pol {
           INFO_PRINT << "Found " << filename_full << "\n";
 	  }
 
-	  char *orig_mt;
-	  char *mt;
-
-	  if ( getFileContents( filename_full.c_str(), &orig_mt ) )
-	  {
-        INFO_PRINT << "Unable to find module " << modulename << "\n"
-          << "\t(Filename: " << filename_full << ")\n";
-		return -1;
-	  }
-
-	  mt = orig_mt;
-	  CompilerContext mod_ctx( filename_full, program->add_dbg_filename( filename_full ), mt );
+	  Clib::FileContentsUnicode fc( filename_full );
+	  CompilerContext mod_ctx( filename_full, program->add_dbg_filename( filename_full ), fc.contents() );
 
 	  std::string save = current_file_path;
 	  current_file_path = getpathof( filename_full );
@@ -3298,13 +3280,11 @@ namespace Pol {
 		if ( res < 0 )
 		{
           INFO_PRINT << "Error reading token in module " << modulename << "\n";
-		  free( orig_mt );
 		  break;
 		}
 		else if ( res == 1 )
 		{
 		  addModule( compmodl.release() );
-		  free( orig_mt );
 		  res = 0;
 		  break;
 
@@ -3322,7 +3302,6 @@ namespace Pol {
 		if ( readFunctionDeclaration( mod_ctx, *puserfunc ) )
 		{
           INFO_PRINT << "Error reading function declaration in module " << modulename << "\n";
-		  free( orig_mt );
 		  res = -1;
 		  break;
 		}
@@ -3332,8 +3311,6 @@ namespace Pol {
 		{
           INFO_PRINT << filename_full << ": Error in declaration for " << puserfunc->name << ":\n"
             << "  Expected a semicolon, got end-of-file or error\n";
-
-		  free( orig_mt );
 		  res = -1;
 		  break;
 		}
@@ -3341,7 +3318,6 @@ namespace Pol {
 		{
           INFO_PRINT << filename_full << ": Error in declaration for " << puserfunc->name << ":\n"
 			<< "  Expected a semicolon, got '" << tk_semicolon << "'\n";
-		  free( orig_mt );
 		  res = -1;
 		  break;
 		}
@@ -3393,14 +3369,14 @@ namespace Pol {
 		return -1;
 	  }
 
-	  if ( strlen( tk_module_name.tokval() ) > 10 )
+	  if ( tk_module_name.tokval()->length() > 10 )
 	  {
         INFO_PRINT << "Error in USE statement: Module names must be <= 10 characters\n"
           << "Module specified was: '" << tk_module_name << "'\n";
 		return -1;
 	  }
 
-	  return useModule( tk_module_name.tokval() );
+	  return useModule( tk_module_name.tokval()->asAnsi(true) );
 	}
 
 	int Compiler::includeModule( const std::string& modulename )
@@ -3504,16 +3480,8 @@ namespace Pol {
 
 	  referencedPathnames.push_back( filename_full );
 
-	  char *orig_mt;
-
-	  if ( getFileContents( filename_full.c_str(), &orig_mt ) )
-	  {
-        INFO_PRINT << "Unable to find module " << modulename << "\n"
-          << "\t(Filename: " << filename_full << ")\n";
-		return -1;
-	  }
-
-	  CompilerContext mod_ctx( filename_full, program->add_dbg_filename( filename_full ), orig_mt );
+	  Clib::FileContentsUnicode fc( filename_full );
+	  CompilerContext mod_ctx( filename_full, program->add_dbg_filename( filename_full ), fc.contents() );
 
 	  std::string save = current_file_path;
 	  current_file_path = getpathof( filename_full );
@@ -3522,7 +3490,6 @@ namespace Pol {
 
 	  current_file_path = save;
 
-	  free( orig_mt );
 	  if ( res < 0 )
 		return res;
 	  else
@@ -3558,7 +3525,7 @@ namespace Pol {
 		return -1;
 	  }
 
-	  return includeModule( tk_module_name.tokval() );
+	  return includeModule( tk_module_name.tokval()->asAnsi(true) );
 
 	}
 
@@ -3625,7 +3592,7 @@ namespace Pol {
 
 	  if ( tk.id == TOK_IDENT )
 	  {
-		label = tk.tokval();
+		label = tk.tokval()->asAnsi(true);
 		if ( getToken( ctx, tk ) || tk.id != TOK_SEMICOLON )
 		{
           INFO_PRINT << "break statement: expected 'break;' or 'break label;'\n";
@@ -3659,7 +3626,7 @@ namespace Pol {
 
 	  if ( tk.id == TOK_IDENT )
 	  {
-		label = tk.tokval();
+		label = tk.tokval()->asAnsi(true);
 		if ( getToken( ctx, tk ) || tk.id != TOK_SEMICOLON )
 		{
           INFO_PRINT << "continue statement: expected 'continue;' or 'continue label;'\n";
@@ -3739,7 +3706,7 @@ namespace Pol {
 		return res;
 	  }
 
-	  if ( localscope.varexists( itrvar.tokval() ) )
+	  if ( localscope.varexists( itrvar.tokval()->asAnsi(true) ) )
 	  {
         INFO_PRINT << "FOR iterator '" << itrvar << "' hides a local variable.\n";
 		return -1;
@@ -3770,13 +3737,13 @@ namespace Pol {
 		  INITFOR creates two local variables, placeholders for the iterator
 		  and end value.  Only the iterator can be accessed, for now.
 		  */
-	  program->addlocalvar( itrvar.tokval() );
+	  program->addlocalvar( itrvar.tokval()->asAnsi(true) );
 	  if ( verbosity_level_ >= 5 )
-		localscope.addvar( itrvar.tokval(), for_ctx );
+		localscope.addvar( itrvar.tokval()->asAnsi(true), for_ctx );
 	  else
-		localscope.addvar( itrvar.tokval(), for_ctx, false );
-	  program->addlocalvar( "_" + std::string( itrvar.tokval() ) + "_end" );
-	  localscope.addvar( "_" + std::string( itrvar.tokval() ) + "_end", for_ctx, false );
+		localscope.addvar( itrvar.tokval()->asAnsi(true), for_ctx, false );
+	  program->addlocalvar( "_" + itrvar.tokval()->asAnsi(true) + "_end" );
+	  localscope.addvar( "_" + itrvar.tokval()->asAnsi(true) + "_end", for_ctx, false );
 
 	  StoredTokenContainer* prog_tokens = &program->tokens;
 	  unsigned again_posn = prog_tokens->next();
@@ -4011,11 +3978,11 @@ namespace Pol {
 
 	  if ( include_debug )
 	  {
-		program->symbols.append( curLine, last_position );
+		program->symbols.append( curLine.asAnsi(true).c_str(), last_position );
 
 		DebugToken DT;
 		DT.sourceFile = curSourceFile;
-		DT.offset = static_cast<unsigned int>( ctx.s - ctx.s_begin );
+		DT.offset = static_cast<unsigned int>( ctx.cursor - ctx.s.begin() );
 		DT.strOffset = last_position;
 
 		program->symbols.append( &DT, sizeof DT, last_position );
@@ -4047,7 +4014,7 @@ namespace Pol {
 	  if ( token.deprecated && ( compilercfg.DisplayWarnings || compilercfg.ErrorOnWarning ) )
 	  {
         INFO_PRINT << "Warning: Found deprecated token "
-		  << "'" << token.tokval() << "'"
+		  << "'" << token.tokval()->asAnsi(true) << "'"
 		  << " on line " << ctx.line
 		  << " of " << ctx.filename << "\n";
 		if ( compilercfg.ErrorOnWarning )
@@ -4119,11 +4086,11 @@ namespace Pol {
 			 precedes.id != RSV_DO &&
 			 precedes.id != RSV_FOR ) )
 		{
-          INFO_PRINT << "Illegal location for label: " << token.tokval() << "\n"
+          INFO_PRINT << "Illegal location for label: " << token.tokval()->asAnsi(true) << "\n"
             << "Labels can only come before DO, WHILE, FOR, FOREACH, REPEAT, and CASE statements.\n";
 		  return -1;
 		}
-		latest_label = token.tokval();
+		latest_label = token.tokval()->asAnsi(true);
 		token.lval = last_position;
 		return 0;
 	  }
@@ -4180,7 +4147,7 @@ namespace Pol {
 		  if ( tmptoken.id == TOK_EQUAL1 )
 		  {
             INFO_PRINT << "Warning: Equals test result ignored.  Did you mean := for assign?\n"
-              << "near: " << curLine << "\n";
+              << "near: " << curLine.asAnsi(true) << "\n";
 			if ( compilercfg.ErrorOnWarning )
 			  throw std::runtime_error( "Warnings treated as errors." );
 			else
@@ -4191,7 +4158,7 @@ namespace Pol {
 			// warn code has no effect/value lost
             INFO_PRINT << "Warning: Result of operation may have no effect.\n"
               << "Token ID: " << tmptoken.id << "\n"
-              << "near: " << curLine << "\n";
+              << "near: " << curLine.asAnsi(true) << "\n";
 			if ( compilercfg.ErrorOnWarning )
 			  throw std::runtime_error( "Warnings treated as errors." );
 			else
@@ -4500,7 +4467,7 @@ namespace Pol {
 		return -1;
 	  }
 	  getToken( ctx, tk_funcname );
-	  while ( ctx.s[0] )
+	  while ( ctx.cursor != ctx.s.end() )
 	  {
 		Token token;
 		res = getToken( ctx, token );
@@ -4512,7 +4479,7 @@ namespace Pol {
 		  return 0;
 		}
 	  }
-	  if ( !ctx.s[0] )
+	  if ( ctx.cursor == ctx.s.end() )
 	  {
         INFO_PRINT << "End-of-File detected, expected 'ENDFUNCTION'\n";
 		return -1;
@@ -4520,7 +4487,7 @@ namespace Pol {
 
 	  if ( res < 0 )
 	  {
-        INFO_PRINT << "Error occurred reading function body for '" << tk_funcname.tokval() << "'\n"
+        INFO_PRINT << "Error occurred reading function body for '" << tk_funcname.tokval()->asAnsi(true) << "'\n"
           << "Function location: " << save_ctx
           << "Error location: \n";
 		return res;
@@ -4540,10 +4507,10 @@ namespace Pol {
 		return -1;
 	  }
 	  haveProgram = true;
-	  program->program_decl = curLine;
+	  program->program_decl = curLine.asAnsi(true);
 	  program_ctx = ctx;
-	  const char* program_body_start = ctx.s;
-	  while ( ctx.s[0] )
+	  size_t program_body_start = ctx.cursor - ctx.s.begin();
+	  while ( ctx.cursor != ctx.s.end() )
 	  {
 		Token token;
 		res = getToken( ctx, token );
@@ -4552,13 +4519,14 @@ namespace Pol {
 
 		if ( token.id == RSV_ENDPROGRAM )
 		{
-		  const char* program_body_end = ctx.s;
+		  size_t program_body_end = ctx.cursor - ctx.s.begin();
 		  size_t len = program_body_end - program_body_start + 1;
-		  program_source = new char[len];
-		  delete_these_arrays.push_back( program_source );
+		  const Unicode program_source = ctx.s.substr(program_body_start, len);
+/* TODO: rework this
 		  memcpy( program_source, program_body_start, len - 1 );
 		  program_source[len - 1] = '\0';
 		  program_ctx.s = program_ctx.s_begin = program_source;
+*/
 		  return 0;
 		}
 
@@ -4612,16 +4580,16 @@ namespace Pol {
 		else if ( token.id == TOK_IDENT )
 		{
 		  unsigned varpos;
-		  if ( localscope.varexists( token.tokval(), varpos ) )
+		  if ( localscope.varexists( token.tokval()->asAnsi(true), varpos ) )
 		  {
             INFO_PRINT << "Program argument '" << token << "' multiply defined.\n";
 			return -1;
 		  }
 		  unsigned posn;
-		  program->symbols.append( token.tokval(), posn );
+		  program->symbols.append( token.tokval()->asAnsi(true).c_str(), posn );
 		  program->append( StoredToken( Mod_Basic, INS_GET_ARG, TYP_OPERATOR, posn ), 0 );
-		  program->addlocalvar( token.tokval() );
-		  localscope.addvar( token.tokval(), ctx, true, unused );
+		  program->addlocalvar( token.tokval()->asAnsi(true) );
+		  localscope.addvar( token.tokval()->asAnsi(true), ctx, true, unused );
 
 		  res = peekToken( ctx, token );
 		  if ( res < 0 ) return res;
@@ -4756,7 +4724,7 @@ namespace Pol {
 	  Token token;
 
 	  UserFunction userfunc;
-	  userfunc.declaration = curLine;
+	  userfunc.declaration = curLine.asAnsi(true);
 
 	  res = getToken( ctx, token );
 	  if ( res ) return res;
@@ -4779,8 +4747,8 @@ namespace Pol {
 	  }
 	  userfunc.ctx = ctx;
 
-	  const char *function_body_start = ctx.s;
-	  while ( ctx.s[0] )
+	  size_t function_body_start = ctx.cursor - ctx.s.begin();
+	  while ( ctx.cursor != ctx.s.end() )
 	  {
 		Token _token;
 		res = getToken( ctx, _token );
@@ -4788,19 +4756,16 @@ namespace Pol {
 		  break;
 		if ( _token.id == RSV_ENDFUNCTION )
 		{
-		  const char* function_body_end = ctx.s;
+		  size_t function_body_end = ctx.cursor - ctx.s.begin();
 		  size_t len = function_body_end - function_body_start + 1;
-		  userfunc.function_body = new char[len];
-		  delete_these_arrays.push_back( userfunc.function_body );
-		  memcpy( userfunc.function_body, function_body_start, len - 1 );
-		  userfunc.function_body[len - 1] = '\0';
-		  userfunc.ctx.s = userfunc.ctx.s_begin = userfunc.function_body;
+		  userfunc.function_body = ctx.s.substr(function_body_start, len);
+		  std::advance(userfunc.ctx.cursor, function_body_start);
 		  userFunctions[userfunc.name] = userfunc;
 		  res = 0;
 		  return 0;
 		}
 	  }
-	  if ( !ctx.s[0] )
+	  if ( ctx.cursor == ctx.s.end() )
 	  {
         INFO_PRINT << "End-of-File detected, expected 'ENDFUNCTION'\n"
           << save_ctx;
@@ -4838,7 +4803,7 @@ namespace Pol {
 
 	  try
 	  {
-		while ( ( res >= 0 ) && ctx.s[0] )
+		while ( ( res >= 0 ) && ctx.cursor != ctx.s.end() )
 		{
 		  res = getStatement( ctx, 0 );
 		}
@@ -4852,7 +4817,7 @@ namespace Pol {
 
 	  // currentscope = NULL;
 	  //scopes.pop();
-	  //assert( scopes.empty() );
+	  //assert( scopes.empty() );f
 
 	  if ( res == -1 )
 	  {
@@ -4868,9 +4833,9 @@ namespace Pol {
 		{
           INFO_PRINT << "Compilation Error:\n";
 		}
-		if ( curLine[0] )
+		if ( curLine.length() )
 		{
-          INFO_PRINT << "Near: " << curLine << "\n";
+          INFO_PRINT << "Near: " << curLine.asAnsi(true) << "\n";
 		}
         INFO_PRINT << ctx;
 		return -1;
@@ -4934,66 +4899,7 @@ namespace Pol {
 	  return 0;
 	}
 
-	// what am I, too good for stdio/ftell? geez...
-	// rope getline
-	int Compiler::getFileContents( const char *file, char **iv )
-	{
-#ifdef _WIN32
-	  // unix does this automatically, duh
-	  //   if (1 || check_filecase_)
-	  {
-		std::string truename = Clib::GetTrueName( file );
-		std::string filepart = Clib::GetFilePart( file );
-		if ( truename != filepart && Clib::FileExists( file ) )
-		{
-          INFO_PRINT << "Case mismatch: \n"
-			<< "  Specified:  " << filepart << "\n"
-			<< "  Filesystem: " << truename << "\n";
-		}
-	  }
-#endif
-
-
-	  char *s = NULL;
-
-	  FILE *fp = fopen( file, "rb" );
-	  if ( fp == NULL )
-		return -1;
-
-      // Goes to the end of file
-      if (fseek(fp, 0, SEEK_END) != 0) {
-          fclose(fp);
-          return -1;
-      }
-      
-      // in order to measure its size
-	  int filelen = ftell( fp );
-      if (filelen < 0) {
-          fclose(fp);
-          return -1;
-      }
-
-	  // and then return to beginning
-      if (fseek(fp, 0, SEEK_SET) != 0)  {
-          fclose(fp);
-          return -1;
-      }
-
-	  s = (char *)calloc( 1, filelen + 1 );
-	  if ( !s )
-	  {
-		fclose( fp );
-		return -1;
-	  }
-
-	  fread( s, filelen, 1, fp );
-
-	  fclose( fp );
-	  *iv = s;
-	  return 0;
-	}
-
-	bool Compiler::read_function_declarations_in_included_file( const char *modulename )
+	bool Compiler::read_function_declarations_in_included_file( const std::string &modulename )
 	{
 	  std::string filename_part = modulename;
 	  filename_part += ".inc";
@@ -5084,15 +4990,8 @@ namespace Pol {
 		return true;
 	  included.insert( filename_check );
 
-	  char *orig_mt;
-
-	  if ( getFileContents( filename_full.c_str(), &orig_mt ) )
-	  {
-        INFO_PRINT << "Unable to read include file '" << filename_full << "'\n";
-		return false;
-	  }
-
-	  CompilerContext mod_ctx( filename_full, program->add_dbg_filename( filename_full ), orig_mt );
+	  Clib::FileContentsUnicode fc( filename_full );
+	  CompilerContext mod_ctx( filename_full, program->add_dbg_filename( filename_full ), fc.contents() );
 
 	  std::string save = current_file_path;
 	  current_file_path = getpathof( filename_full );
@@ -5101,22 +5000,27 @@ namespace Pol {
 
 	  current_file_path = save;
 
-	  free( orig_mt );
 	  return res;
 	}
 
+	/**
+	 * Updates the curLine variable, limited to 80 chars.
+	 * Also skips comments and whitespaces in the context, moving cursor forward
+	 */
 	void Compiler::readCurLine( CompilerContext& ctx )
 	{
 	  ctx.skipws();
 	  ctx.skipcomments();
 
-	  Clib::stracpy( curLine, ctx.s, sizeof curLine );
+	  curLine.clear();
 
-	  char *t;
-	  t = strchr( curLine, '\r' );
-	  if ( t ) t[0] = '\0';
-	  t = strchr( curLine, '\n' );
-	  if ( t ) t[0] = '\0';
+	  for( u8 i = 0; i < 80; i++ )
+	  {
+		auto c = ctx.cursor + i;
+		if( *c == '\r' || *c == '\n' )
+		  break;
+		curLine += *c;
+	  }
 	}
 
 	bool Compiler::inner_read_function_declarations( const CompilerContext& ctx )
@@ -5167,7 +5071,7 @@ namespace Pol {
 		  if ( getToken( tctx, tk_module_name ) == 0 &&
 			   ( tk_module_name.id == TOK_IDENT || tk_module_name.id == TOK_STRING ) )
 		  {
-			if ( !read_function_declarations_in_included_file( tk_module_name.tokval() ) )
+			if ( !read_function_declarations_in_included_file( tk_module_name.tokval()->asAnsi(true).c_str() ) )
 			{
 			  // read.. prints out an error message
 			  return false;
@@ -5180,7 +5084,7 @@ namespace Pol {
 		  if ( getToken( tctx, tk_module_name ) == 0 &&
 			   ( tk_module_name.id == TOK_IDENT || tk_module_name.id == TOK_STRING ) )
 		  {
-			int res = useModule( tk_module_name.tokval() );
+			int res = useModule( tk_module_name.tokval()->asAnsi(true) );
 			if ( res < 0 )
 			  return false;
 		  }
@@ -5285,82 +5189,95 @@ namespace Pol {
 		}
 	  }
 	}
-	bool is_web_script( const char* file )
+	bool is_web_script( const std::string &file )
 	{
-	  const char* ext = strstr( file, ".hsr" );
-	  if ( ext && memcmp( ext, ".hsr", 5 ) == 0 )
+	  auto flen = file.length();
+
+	  if( flen < 4 )
+		return false;
+
+	  if( file.compare( flen-4, 4, ".hsr" ) == 0 )
 		return true;
-	  ext = strstr( file, ".asp" );
-	  if ( ext && memcmp( ext, ".asp", 5 ) == 0 )
+	  if( file.compare( flen-4, 4, ".asp" ) == 0 )
 		return true;
+
 	  return false;
 	}
 
-	void preprocess_web_script( Clib::FileContents& fc )
+	/**
+	 * Transform the raw html page into a script with a single WriteHtml() instruction
+	 */
+	void preprocess_web_script( Clib::FileContentsUnicode& fc )
 	{
-	  std::string output;
-	  output = "use http;";
+	  Unicode output;
+	  output += "use http;";
 	  output += '\n';
 
 	  bool reading_html = true;
 	  bool source_is_emit = false;
-	  const char* s = fc.contents();
-	  std::string acc;
-	  while ( *s )
+	  Unicode s = fc.contents();
+	  Unicode acc;
+	  for( auto itr = s.begin(); itr != s.end; ++itr )
 	  {
 		if ( reading_html )
 		{
-		  if ( s[0] == '<' && s[1] == '%' )
+		  if ( itr[0] == '<' && itr[1] == '%' )
 		  {
 			reading_html = false;
 			if ( !acc.empty() )
 			{
-			  output += "WriteHtmlRaw( \"" + acc + "\");\n";
+			  output += "WriteHtmlRaw( \"";
+			  output += acc;
+			  output += "\");\n";
 			  acc = "";
 			}
-			s += 2;
-			source_is_emit = ( s[0] == '=' );
+			itr += 2;
+			source_is_emit = ( itr[0] == '=' );
 			if ( source_is_emit )
 			{
 			  output += "WriteHtmlRaw( ";
-			  ++s;
+			  ++itr;
 			}
 		  }
 		  else
 		  {
-			if ( *s == '\"' )
+			if ( *itr == '\"' )
 			  acc += "\\\"";
-			else if ( *s == '\r' )
+			else if ( *itr == '\r' )
 			  ;
-			else if ( *s == '\n' )
+			else if ( *itr == '\n' )
 			  acc += "\\n";
 			else
-			  acc += *s;
-			++s;
+			  acc += *itr;
+			++itr;
 		  }
 		}
 		else
 		{
-		  if ( s[0] == '%' && s[1] == '>' )
+		  if ( itr[0] == '%' && itr[1] == '>' )
 		  {
 			reading_html = true;
-			s += 2;
+			itr += 2;
 			if ( source_is_emit )
 			  output += " );\n";
 		  }
 		  else
 		  {
-			output += *s++;
+			output += *itr++;
 		  }
 		}
 	  }
 	  if ( !acc.empty() )
-		output += "WriteHtmlRaw( \"" + acc + "\");\n";
+	  {
+		output += "WriteHtmlRaw( \"";
+		output += acc;
+		output += "\");\n";
+	  }
 	  fc.set_contents( output );
 	}
 
 	// getcwd
-	int Compiler::compileFile( const char *in_file )
+	int Compiler::compileFile( const std::string &in_file )
 	{
 	  int res = -1;
 	  try
@@ -5370,9 +5287,9 @@ namespace Pol {
 		current_file_path = getpathof( filepath );
 		if ( verbosity_level_ >= 11 )
           INFO_PRINT << "cfp: " << current_file_path << "\n";
-		Clib::FileContents fc( filepath.c_str() );
+		Clib::FileContentsUnicode fc( filepath );
 
-		if ( is_web_script( filepath.c_str() ) )
+		if ( is_web_script( filepath ) )
 		{
 		  preprocess_web_script( fc );
 		}
@@ -5419,17 +5336,17 @@ namespace Pol {
 
 
 
-	int Compiler::write( const char *fname )
+	int Compiler::write( const std::string &fname )
 	{
 	  return program->write( fname );
 	}
 
-	int Compiler::write_dbg( const char *fname, bool gen_txt )
+	int Compiler::write_dbg( const std::string &fname, bool gen_txt )
 	{
 	  return program->write_dbg( fname, gen_txt );
 	}
 
-	void Compiler::writeIncludedFilenames( const char* fname ) const
+	void Compiler::writeIncludedFilenames( const std::string &fname ) const
 	{
         std::ofstream ofs(fname, std::ios::out | std::ios::trunc);
 	  //	ofs << current_file_path << endl;
@@ -5446,6 +5363,7 @@ namespace Pol {
 
   }
 }
+
 /*
 	local x;			[ "x", RSV_LOCAL, # ]
 	local x:=5;			[ "x", RSV_LOCAL, 5, TOK_ASSIGN, # ]
@@ -5486,5 +5404,4 @@ namespace Pol {
 	[else
 	statements; ]
 	endif;
-	*/
-
+*/

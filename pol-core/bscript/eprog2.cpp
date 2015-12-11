@@ -273,10 +273,10 @@ namespace Pol {
 	  add_ins_dbg_info();
 	}
 
-	int EScriptProgram::write( const char *fname )
+	int EScriptProgram::write( const std::string &fname )
 	{
 	  EScriptProgram& program = *this;
-	  FILE *fp = fopen( fname, "wb" );
+	  FILE *fp = fopen( fname.c_str(), "wb" );
 	  if ( !fp )
 		return -1;
 
@@ -386,9 +386,9 @@ namespace Pol {
 	  }
 	  return cnt;
 	}
-	int EScriptProgram::write_dbg( const char *fname, bool gen_txt )
+	int EScriptProgram::write_dbg( const std::string &fname, bool gen_txt )
 	{
-	  FILE* fp = fopen( fname, "wb" );
+	  FILE* fp = fopen( fname.c_str(), "wb" );
 	  if ( !fp )
 		return -1;
 

@@ -19,6 +19,7 @@ Notes
 
 #include "options.h"
 #include "../../lib/format/format.h"
+#include "../clib/unicode.h"
 
 #include <iosfwd>
 #include <set>
@@ -53,13 +54,12 @@ namespace Pol {
 	  };
 	  UserFunction *userfunc;
 	  bool deprecated;
-      bool ownsStr;
 	  unsigned char module;
 
 	  static unsigned int instances();
 	  static void show_instances();
 	protected:
-	  const char *token;
+	  Unicode token;
 #if STORE_INSTANCELIST
 	  typedef set<Token*> Instances;
 	  static Instances _instancelist;
@@ -69,7 +69,7 @@ namespace Pol {
 	  void unregister_instance();
 
 	public:
-	  const char *tokval() const { return token; }
+	  const Unicode *tokval() const { return &token; }
 
 	  Token();
 	  Token( const Token& tok );
@@ -78,10 +78,11 @@ namespace Pol {
 	  Token( ModuleID module, BTokenId id, BTokenType type );
 	  Token( BTokenId id, BTokenType type );
 	  Token( ModuleID module, BTokenId id, BTokenType type, UserFunction *userfunc );
+
 	  void nulStr();
-	  void setStr( const char *s );
+	  void copyStr( const Unicode& s );
+	  inline void copyStr( const Unicode *s ) { copyStr(*s); };
 	  void copyStr( const char *s );
-	  void copyStr( const char *s, int len );
 
 	  ~Token();
 

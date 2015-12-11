@@ -62,6 +62,7 @@ Notes
 #include "../clib/strutil.h"
 #include "../clib/unittest.h"
 #include "../clib/logfacility.h"
+#include "../clib/unicode.h"
 
 #include <cstdlib>
 #include <cctype>
@@ -115,12 +116,6 @@ namespace Pol {
 	  "Missing ']'"
 	};
 	char operator_brk[] = "+-/*(),<=>,:;%";
-
-	char ident_allowed[] =
-	  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	  "abcdefghijklmnopqrstuvwxyz"
-	  "0123456789"
-	  "_"; // $%@& removed 9/17/1998 Syz
 
 
 	int allowed_table[8][8] =
@@ -1010,24 +1005,33 @@ namespace Pol {
 #endif
 
 
+	/**
+	* Tries to read a an operator from context
+	*
+	* @param tok Token&: The token to store the found literal into
+	* @param ctx CompilerContext&: The context to look into
+	* @param opList: The list of possible operators to look for, as Operator[]
+	* @param n_ops: Number of operators in the list
+	* @return 0 when no matching text is found, 1 on success, -1 on error (also sets err)
+	*/
 	int Parser::tryOperator( Token& tok,
-							 const char *t,
-							 const char **s,
-							 Operator *opList, int n_ops,
-							 char *opbuf )
+							 CompilerContext& ctx,
+							 Operator *opList, int n_ops)
 	{
+	  char opbuf[10];
 	  int bufp = 0;
 	  int thisMatchPartial;
 	  Operator* pLastMatch = NULL;
 	  Operator* pMatch = NULL;
 
-	  while ( t && *t )
+	  auto c = ctx.cursor;
+	  while ( c != ctx.s.end() )
 	  {
 		//		if (strchr(operator_brk, *t)) mustBeOperator = 1;
 
 		/* let's try to match it as we go. */
 		if ( bufp == 4 ) { err = PERR_BADTOKEN; return -1; }
-		opbuf[bufp++] = *t++;
+		opbuf[bufp++] = (c++)->asAnsi(true);
 		opbuf[bufp] = '\0';
 		matchOperators( opList, n_ops,
 						opbuf,
@@ -1064,7 +1068,7 @@ namespace Pol {
 
 	  if ( pMatch )
 	  {
-		*s += strlen( pMatch->code );
+		ctx.cursor += strlen( pMatch->code );
 
 		tok.module = Mod_Basic;
 		tok.id = pMatch->id;
@@ -1072,53 +1076,67 @@ namespace Pol {
 		tok.precedence = pMatch->precedence;
 		tok.deprecated = pMatch->deprecated;
 
-		tok.setStr( pMatch->code );
+		tok.copyStr( pMatch->code );
 		return 1;
 	  }
 
 	  return 0; // didn't find one!
 	}
 
+	/**
+	* Tries to read a binary operator from context
+	*
+	* @param tok Token&: The token to store the found literal into
+	* @param ctx CompilerContext&: The context to look into
+	* @return 0 when no matching text is found, 1 on success, -1 on error (also sets err)
+	*/
 	int Parser::tryBinaryOperator( Token& tok, CompilerContext& ctx )
 	{
-	  int res;
-	  char opbuf[10];
-
-	  res = tryOperator( tok, ctx.s, &ctx.s, binary_operators, n_operators, opbuf );
-
-	  return res;
+	  return tryOperator( tok, ctx, binary_operators, n_operators );
 	}
 
+	/**
+	* Tries to read an unary operator from context
+	*
+	* @param tok Token&: The token to store the found literal into
+	* @param ctx CompilerContext&: The context to look into
+	* @return 0 when no matching text is found, 1 on success, -1 on error (also sets err)
+	*/
 	int Parser::tryUnaryOperator( Token& tok, CompilerContext& ctx )
 	{
-	  int res;
-	  char opbuf[10];
-
-	  res = tryOperator( tok, ctx.s, &ctx.s, unary_operators, n_unary, opbuf );
-
-	  return res;
+	  return tryOperator( tok, ctx, unary_operators, n_unary );
 	}
 
+	/**
+	* Tries to read a numeric value from context
+	*
+	* @param tok Token&: The token to store the found literal into
+	* @param ctx CompilerContext&: The context to look into
+	* @return 0 when no matching text is found, 1 on success, -1 on error (also sets err)
+	*/
 	int Parser::tryNumeric( Token& tok, CompilerContext& ctx )
 	{
-	  if ( isdigit( ctx.s[0] ) || ctx.s[0] == '.' )
+	  if ( ctx.cursor->isDigit() || *ctx.cursor == '.' )
 	  {
-		char *endptr, *endptr2;
-		int l = strtol( ctx.s, &endptr, 0 );
-		double d = strtod( ctx.s, &endptr2 );
+		const wchar_t *potentialNumPtr = ctx.s.asWcharArray();
+		potentialNumPtr += ctx.cursor - ctx.s.begin();
+
+		wchar_t *endptr, *endptr2;
+		int l = wcstol( potentialNumPtr, &endptr, 0 );
+		double d = wcstod( potentialNumPtr, &endptr2 );
 		tok.type = TYP_OPERAND;
 		if ( endptr >= endptr2 )
 		{ // long got more out of it, we'll go with that
 		  tok.id = TOK_LONG;
 		  tok.lval = l;
-		  ctx.s = endptr;
+		  ctx.cursor += endptr - potentialNumPtr;
 		  return 1;
 		}
 		else
 		{
 		  tok.id = TOK_DOUBLE;
 		  tok.dval = d;
-		  ctx.s = endptr2;
+		  ctx.cursor += endptr2 - potentialNumPtr;
 		  return 1;
 		}
 	  }
@@ -1134,151 +1152,126 @@ namespace Pol {
 	*/
 	int Parser::tryLiteral( Token& tok, CompilerContext& ctx )
 	{
-	  if ( ctx.s[0] == '\"' )
+	  if ( *ctx.cursor == '\"' )
 	  {
-		const char* end = &ctx.s[1];
-		Utf8String lit;
+		// Quote found, go on and read a string
+		Pol::Unicode lit;
 		bool escnext = false;
-		u8 utf8next = 0;
 		u8 hexnext = 0;
-		char hexstr[3];
-		memset( hexstr, 0, 3 );
+		Pol::Unicode hexstr;
+		Pol::Utf8CharValidator validator;
 
 		for ( ;; )
 		{
-		  if ( !*end )
+		  if ( ctx.cursor == ctx.s.end() )
 		  {
 			err = PERR_UNTERMSTRING;
 			return -1;
 		  }
 
-		  assert( ! ( (escnext && utf8next) || ( utf8next && hexnext) || ( escnext && hexnext ) ) );
+		  ctx.cursor++;
+
+		  assert( ! ( escnext && hexnext ) );
 		  if ( escnext )
 		  {
 			// waiting for 2nd character after an escape sequence
 			escnext = false;
-			if ( *end == 'n' )
+			if ( *ctx.cursor == 'n' )
 			  lit += '\n';
-			else if ( *end == 't' )
+			else if ( *ctx.cursor == 't' )
 			  lit += '\t';
-			else if ( *end == 'x' )
+			else if ( *ctx.cursor == 'x' )
+			{
+			  hexstr.clear();
 			  hexnext = 2;
+			}
 			else
-			  lit += *end;
+			  lit += *ctx.cursor;
 		  }
 		  else if ( hexnext )
 		  {
 			// waiting for next (two) chars in hex escape sequence (eg. \xFF)
-			hexstr[2-hexnext] = *end;
+			if( ctx.cursor->getByteLen() > 1 )
+			{
+			  err = PERR_INVESCAPE;
+			  return -1;
+			}
+			hexstr += *ctx.cursor;
 			hexnext--;
 			if( hexnext == 0 )
 			{
+			  std::string ansiHexstr;
+			  if( ! hexstr.asAnsi(& ansiHexstr) )
+			  {
+				err = PERR_INVESCAPE;
+				return -1;
+			  }
 			  char* endptr;
-			  u8 ord = static_cast<u8>(strtol(hexstr, &endptr, 16));
+			  char ord = static_cast<char>(strtol(ansiHexstr.c_str(), &endptr, 16));
 			  if( *endptr != '\0' )
 			  {
 				err = PERR_INVESCAPE;
 				return -1;
 			  }
 			  //Create utf8 from ord
-			  //TODO: move this into a function
-			  if( ord < 0x80 )
-				lit += ord;
-			  else
-			  {
-				lit += 0xC0 | ( ord >> 6 ); // first byte: 110XXXXX
-				lit += 0x80 | ( ord & 0x3f ); // second byte: 10XXXXXX
-			  }
+			  lit += ord;
 			}
-		  }
-		  else if ( utf8next )
-		  {
-			// waiting for next byte in a multibyte char, it must be 10XXXXXX
-			if( ( *end & 0xC0 ) != 0x80 )
-			{
-			  err = PERR_INVUTF8STR;
-			  return -1;
-			}
-			utf8next--;
-			lit += *end;
 		  }
 		  else
 		  {
-			if ( *end == '\\' )
+			if ( *ctx.cursor == '\\' )
 			  escnext = true;
-			else if ( *end == '\"' )
+			else if ( *ctx.cursor == '\"' )
 			  break;
-			else if ( *end & 0x80 )
-			{
-			  // this is the first byte of a multibyte utf8 char
-			  // number of most significant bits set to 1 tells how many bytes is the
-			  // character composed in total (first byte is this one)
-			  for( u8 i = 6; i >= 0; i-- )
-			  {
-				if( *end & ( 1 << i ) )
-				  utf8next++;
-				else
-				  break;
-			  }
-			  if( utf8next < 1 || utf8next > 3 )
-			  {
-				err = PERR_INVUTF8STR;
-				return -1;
-			  }
-			  lit += *end;
-			}
 			else
-			  lit += *end;
+			  lit += *ctx.cursor;
 		  }
-		  ++end;
+		  ctx.cursor++;
 		}
-		/*
-				char *end = strchr(&ctx.s[1], '\"');
-				if (!end)
-				{
-				err = PERR_UNTERMSTRING;
-				return -1;
-				}
-				*/
-		//int len = end - ctx.s;   //   "abd" len = 5-1 = 4
 		tok.id = TOK_STRING; // this is a misnomer I think!
 		tok.type = TYP_OPERAND;
-		tok.copyStr( lit.c_str() );
+		tok.copyStr( lit );
 
-		ctx.s = end + 1; // skip past the ending delimiter
+		ctx.cursor++; // skip past the ending delimiter
 		return 1;
+
 	  }
-	  else if ( isalpha( ctx.s[0] ) || ctx.s[0] == '_' )
-	  { // we have a variable/label/verb.
-		const char *end = ctx.s;
-		while ( *end &&
-				!isspace( *end ) &&
-				strchr( ident_allowed, *end ) )
+	  else if ( ctx.cursor->isAlpha() || *ctx.cursor == '_' )
+	  {
+		// we have a variable/label/verb.
+		Pol::Unicode lit;
+
+		while ( ctx.cursor != ctx.s.end() )
 		{
-		  ++end;
+		  ctx.cursor++;
+
+		  if( isIdentAllowed( *ctx.cursor ) )
+			lit += *ctx.cursor;
+		  else
+			break;
 		}
 		// Catch identifiers of the form module::name
-		if ( end[0] == ':' && end[1] == ':' )
+		if ( ctx.cursor != ctx.s.end() && *ctx.cursor == ':' && ctx.cursor[1] == ':' )
 		{
-		  end += 2;
-		  while ( *end &&
-				  !isspace( *end ) &&
-				  strchr( ident_allowed, *end ) )
+		  ctx.cursor += 2;
+		  while ( ctx.cursor != ctx.s.end() )
 		  {
-			++end;
+			ctx.cursor++;
+
+			if( isIdentAllowed( *ctx.cursor ) )
+			  lit += *ctx.cursor;
+			else
+			  break;
 		  }
 		}
 
-		int len = static_cast<int>( end - ctx.s + 1 );	//   "abcd"
-
-		tok.copyStr( ctx.s, len - 1 );
-
+		tok.copyStr( lit );
 		tok.id = TOK_IDENT;
 		tok.type = TYP_OPERAND;
 
-		ctx.s = end;
 		return 1;
 	  }
+
 	  return 0;
 	}
 
@@ -1293,25 +1286,25 @@ namespace Pol {
 		  tok.type = binary_operators[i].type;
 		  tok.precedence = binary_operators[i].precedence;
 		  /*
-					  if (tok.type == TYP_OPERATOR &&
-					  (tok.id == TOK_ADDMEMBER ||
-					  tok.id == TOK_DELMEMBER ||
-					  tok.id == TOK_CHKMEMBER ||
-					  tok.id == TOK_MEMBER) )
+					  if (tok.type == typ_operator &&
+					  (tok.id == tok_addmember ||
+					  tok.id == tok_delmember ||
+					  tok.id == tok_chkmember ||
+					  tok.id == tok_member) )
 					  {
 					  int res;
-					  Token tk2;
-					  res = getToken( s, tk2 );
+					  token tk2;
+					  res = gettoken( s, tk2 );
 					  if (res < 0) return res;
-					  if (tk2.type != TYP_OPERAND || tk2.id != TOK_IDENT)
+				  if (tk2.type != typ_operand || tk2.id != tok_ident)
 					  return -1;
-					  tok.copyStr( tk2.tokval() );
+					  tok.copystr( tk2.tokval() );
 					  }
 					  else
 					  {
 					  */
-		  tok.setStr( binary_operators[i].code );
-		  //tok.nulStr();
+		  tok.copyStr( binary_operators[i].code );
+		  //tok.nulstr();
 		  /*
 					  }
 					  */
@@ -1332,7 +1325,7 @@ namespace Pol {
 		  tok.id = unary_operators[i].id;
 		  tok.type = unary_operators[i].type;
 		  tok.precedence = unary_operators[i].precedence;
-		  tok.setStr( unary_operators[i].code );
+		  tok.copyStr( unary_operators[i].code );
 
 		  return 1;
 		}
@@ -1340,20 +1333,20 @@ namespace Pol {
 	  return 0;
 	}
 
-
 	int Parser::recognize( Token& tok, const char *buf, const char **s )
 	{
 	  if ( recognize_binary( tok, buf, s ) ) return 1;
 	  return recognize_unary( tok, buf );
 	}
 
-
-	bool Parser::recognize_reserved_word( Token& tok, const char *buf )
+	bool Parser::recognize_reserved_word( Token& tok )
 	{
 	  if ( tok.id != TOK_IDENT )
 		return false;
 
-	  auto itr = reservedWordsByName.find( buf );
+	  std::string tokStr;
+	  assert( tok.tokval()->asAnsi(&tokStr) );
+	  auto itr = reservedWordsByName.find( tokStr );
 	  if ( itr != reservedWordsByName.end() )
 	  {
 		ReservedWord* rv = ( *itr ).second;
@@ -1363,7 +1356,7 @@ namespace Pol {
 		tok.type = rv->type;
 		tok.precedence = rv->precedence;
 		tok.deprecated = rv->deprecated;
-		tok.setStr( rv->word );
+		tok.copyStr( rv->word );
 		return true;
 	  }
 	  return false;
@@ -1412,6 +1405,8 @@ namespace Pol {
 	}
 
 	/**
+	 * Reads next token from given context
+	 *
 	 * what is a token? a set of homogeneous characters
 	 * a Label:
 	 * begins with [A-Za-z_], followed by [A-Za-z0-9]
@@ -1433,8 +1428,13 @@ namespace Pol {
 	 * note a collection of more than one is considered a SINGLE operator.
 	 * So if you put 6*-7, *- is the operator. nasty I know, but
 	 * what am I supposed to do? (Maximal munch, is what is actually done!)
+	 *
+	 * @param tok Token&: The token to store the found literal into
+	 * @param ctx CompilerContext&: The context to look into
+	 * @param pexpr unused
+	 * @return 0 when no matching text is found, 1 on success, -1 on error (also sets err)
 	 */
-	int Parser::getToken( CompilerContext& ctx, Token& tok, Expression* /* expr not used */ )
+	int Parser::getToken( CompilerContext& ctx, Token& tok, Expression* /*pexpr*/ )
 	{
 	  int hit = 0;
 
@@ -1444,13 +1444,13 @@ namespace Pol {
 	  tok.dbg_filenum = ctx.dbg_filenum;
 	  tok.dbg_linenum = ctx.line;
 
-	  if ( ctx.s[0] == ';' )
+	  if ( *ctx.cursor == ';' )
 	  {
 		tok.module = Mod_Basic;
 		tok.id = TOK_SEMICOLON;
 		tok.type = TYP_DELIMITER;
-		tok.setStr( ";" );
-		ctx.s++;
+		tok.copyStr( ";" );
+		ctx.cursor++;
 		return 0;
 	  }
 
@@ -1461,7 +1461,7 @@ namespace Pol {
 	  }
 	  else if ( hit )
 	  {
-		recognize_reserved_word( tok, tok.tokval() );
+		recognize_reserved_word( tok );
 		return 0;
 	  }
 
@@ -1487,12 +1487,12 @@ namespace Pol {
 	  if ( hit == -1 )  return -1;
 	  else if ( hit ) return 0;
 
-	  if ( ctx.s[0] == ':' )
+	  if ( *ctx.cursor == ':' )
 	  {
-		++ctx.s;
+		ctx.cursor++;
 		tok.id = RSV_COLON;
 		tok.type = TYP_RESERVED;
-		tok.setStr( ":" );
+		tok.copyStr( ":" );
 		return 0;
 	  }
 
@@ -1501,33 +1501,37 @@ namespace Pol {
 	  return -1;
 	}
 
-	int Parser::peekToken( const CompilerContext& ctx, Token& token, Expression* expr )
+	/**
+	 * Reads next token from given context, without modifying it
+	 *
+	 * @see Parser::getToken( CompilerContext& ctx, Token& tok )
+	 */
+	int Parser::peekToken( const CompilerContext& ctx, Token& token )
 	{
 	  CompilerContext tctx( ctx );
-	  return getToken( tctx, token, expr );
+	  return getToken( tctx, token );
 	}
-	/* Parser::parseToken deleted. */
-	/* not used? ens 12/10/1998
-	int Parser::IP(Expression& expr, char *s)
+
+	/**
+	 * Checks if a given character is a valid character as part of an identifier
+	 */
+	bool Parser::isIdentAllowed(const UnicodeChar& c) const
 	{
-	reinit(expr);
-
-	Token *ptoken;
-	if (!quiet) cout << "Parsing \"" << s << '\"' << endl;
-
-	expr.TX.push(new Token); // push terminator token
-
-	ptoken = new Token;
-	while (getToken(&s, *ptoken)==0)
-	{
-	parseToken(expr, ptoken);
-	ptoken = new Token;
+		char16_t ord = c.asUtf16();
+		if( ord > 0x7F )
+		  return false; // non-ASCII
+		if( ord < 0x30 )
+		  return false; // below first numeric char ($%@& removed 9/17/1998 Syz)
+		if( ord >= 0x30 && ord <= 0x39 )
+		  return true; // 0123456789
+		if( ord >= 0x41 && ord <= 0x5a )
+		  return true; // ABCDEFGHIJKLMNOPQRSTUVWXYZ
+		if( ord == 0x5f )
+		  return true; // _
+		if( ord >= 0x61 && ord <= 0x7a )
+		  return true; // abcdefghijklmnopqrstuvwxyz
+		return false;
 	}
-	parseToken(expr, ptoken);
-
-	return 0;
-	}
-	*/
 
 
 	int SmartParser::isOkay( const Token& token, BTokenType last_type )
@@ -1546,32 +1550,6 @@ namespace Pol {
 	  return allowed_table[last_type][this_type];   // maybe okay
 	}
 
-	/* Functions */
-
-	/*
-	struct {
-	Verb *vtable;
-	int tablesize;
-	} VerbTable[MOD_HIGHEST] =
-	{
-	{ parser_verbs, n_parser_verbs }
-	};
-	*/
-
-
-	/* let's suppose..
-	   an overridden getToken is really smart, and figures out if IDENTS
-	   are variable names, verbs, functions,  or labels.  To this end it
-	   pulls out the ':' if necessary.
-	   TYP_OPERAND, TOK_VARNAME
-	   TYP_FUNC,	TOK_MID,	<-- TYP_OPERAND for purposes of legality
-	   TYP_PROC,	TOK_PRINT,
-	   TYP_LABEL,   (don't care)
-
-	   IP still does the same thing only it no longer looks for isVerb.
-	   have the new getToken put, say, the verb number in lval, so we now
-	   have an array element number.
-	   */
 	/*
 	int SmartParser::isFunc(Token& token, Verb **v)
 	{
@@ -1591,50 +1569,35 @@ namespace Pol {
 	}
 	*/
 
-	/* Labels.
-
-			A label is an ident operand, followed by a colon, followed by
-			either whitespace or end-of-file.
-
-			Note, this definition just happens to exclude ':=' and '::',
-			which is important.
-			*/
-
-
+	/**
+	 * Like Parser::tryLiteral, with extra elements
+	 *
+	 * Labels.
+	 * A label is an ident operand, followed by a colon, followed by
+	 * either whitespace or end-of-file.
+	 * Note, this definition just happens to exclude ':=' and '::',
+	 * which is important.
+	 *
+	 * @see Parser::tryLiteral( Token& tok, CompilerContext& ctx )
+	 */
 	int SmartParser::tryLiteral( Token& tok, CompilerContext& ctx )
 	{
-	  int res;
-	  res = Parser::tryLiteral( tok, ctx );
+	  int res = Parser::tryLiteral( tok, ctx );
 	  if ( res == 1 && tok.id == TOK_IDENT )
 	  { // check for "label:"
 
 		// whitespace used to be skipped here.
 		//   while (*t && isspace(*t)) t++;
-		if ( !ctx.s[0] ) // ident EOF can't be a label
+		if ( ctx.cursor == ctx.s.end() ) // ident EOF can't be a label
 		{
 		  return 1;
 		}
 
-		// this might be a nice place to look for module::function, too.
-#if 0
-		if (t[0] == ':' && t[1] == ':')
-		{
-		  t += 2;
-		  *s = t;
-		  Token tok2;
-		  int res2 = Parser::tryLiteral( tok2, t, s );
-		  if (res2 < 0) return res2;
-		  if (res2 == 0)
-			return -1;
-		  // append '::{tok2 tokval}' to tok.tokval
-		  // (easier when/if token uses string)
-		}
-#endif
-		if ( ctx.s[0] == ':' && ( ctx.s[1] == '\0' || isspace( ctx.s[1] ) ) )
+		if ( ctx.cursor[1] == ':' && ( ctx.cursor+2 == ctx.s.end() || ctx.cursor[2].isSpace() ) )
 		{
 		  tok.id = CTRL_LABEL;
 		  tok.type = TYP_LABEL;
-		  ++ctx.s;
+		  ctx.cursor++;
 		}
 		return 1;
 	  }
@@ -1853,24 +1816,38 @@ namespace Pol {
 	  return 0;
 	}
 
-	/*
-		Some identifiers are functions (user-defined or module-defined)
-		these are recognized here.  HOWEVER, in some cases these should
-		be ignored - particularly, after the "." operator and its ilk.
-		For example, if the LEN function is defined,
-		"print a.len;" should still be valid (assuming A is a variable
-		with a 'len' member).  In these cases, the operator in question
-		will be at the top of the TX stack.  So, if we find this operator
-		there, we won't check for functions.
-		This is also the perfect opportunity to morph would-be identifiers
-		into strings, or "member names" if that turns out the way to go.
-		(Normally, we would emit TOK_IDENT(left) TOK_IDENT(right) TOK_MEMBER.
-		The problem here is that TOK_IDENT(left) is seen as a variable
-		(quite rightly), but so is TOK_IDENT(right), which is wrong.
-		We used to transform this in addToken, but this is better
-		I think.)
-		*/
-
+	/**
+	 * Some identifiers are functions (user-defined or module-defined)
+	 * these are recognized here.  HOWEVER, in some cases these should
+	 * be ignored - particularly, after the "." operator and its ilk.
+	 * For example, if the LEN function is defined,
+	 * "print a.len;" should still be valid (assuming A is a variable
+	 * with a 'len' member).  In these cases, the operator in question
+	 * will be at the top of the TX stack.  So, if we find this operator
+	 * there, we won't check for functions.
+	 * This is also the perfect opportunity to morph would-be identifiers
+	 * into strings, or "member names" if that turns out the way to go.
+	 * (Normally, we would emit TOK_IDENT(left) TOK_IDENT(right) TOK_MEMBER.
+	 * The problem here is that TOK_IDENT(left) is seen as a variable
+	 * (quite rightly), but so is TOK_IDENT(right), which is wrong.
+	 * We used to transform this in addToken, but this is better
+	 * I think.)
+	 *
+	 * @note let's suppose..
+	 * an overridden getToken is really smart, and figures out if IDENTS
+	 * are variable names, verbs, functions,  or labels.  To this end it
+	 * pulls out the ':' if necessary.
+	 * TYP_OPERAND, TOK_VARNAME
+	 * TYP_FUNC,	TOK_MID,	<-- TYP_OPERAND for purposes of legality
+	 * TYP_PROC,	TOK_PRINT,
+	 * TYP_LABEL,   (don't care)
+	 *
+	 * IP still does the same thing only it no longer looks for isVerb.
+	 * have the new getToken put, say, the verb number in lval, so we now
+	 * have an array element number.
+	 *
+	 * @see Parser::getToken( CompilerContext& ctx, Token& token )
+	 */
 	int SmartParser::getToken( CompilerContext& ctx, Token& token, Expression* pexpr )
 	{
 	  int res = Parser::getToken( ctx, token );
@@ -2020,15 +1997,14 @@ namespace Pol {
 	  return false;
 	}
 
-	/* if comma terminator is allowed, (reading args, or declaring variables)
-		leaves the terminator/comma.
-		if comma term not allowed, eats the semicolon.
-		if right paren allowed, leaves the right paren.
-
-
-		(obviously, this function's behavior needs some work!)
-		*/
-
+	/**
+	 * if comma terminator is allowed, (reading args, or declaring variables)
+	 * leaves the terminator/comma.
+	 * if comma term not allowed, eats the semicolon.
+	 * if right paren allowed, leaves the right paren.
+	 *
+	 * @note (obviously, this function's behavior needs some work!)
+	 **/
 	int SmartParser::IIP( Expression& expr, CompilerContext& ctx, unsigned flags )
 	{
 	  BTokenType last_type = TYP_TERMINATOR;
@@ -2047,17 +2023,14 @@ namespace Pol {
 	  int auto_term_allowed = flags & EXPR_FLAG_AUTO_TERM_ALLOWED;
 	  if ( !quiet )
 	  {
-		char buf[80];
-		Clib::stracpy( buf, ctx.s, 80 );
-		strtok( buf, "\r\n" );
-        INFO_PRINT << "Parsing " << buf << "\n";
+		INFO_PRINT << "Parsing " << ctx.s.asAnsi(true).erase(80) << "\n";
 	  }
 
 	  expr.TX.push( new Token ); /* push a terminator token */
 	  int leftbracket_count = 0;
 	  while ( !done && ( res == 0 ) )
 	  {
-		const char *t = ctx.s;
+		//const Unicode t = ctx.s;
 		Token token;
 
 		res = peekToken( ctx, token );
@@ -2144,7 +2117,7 @@ namespace Pol {
 		if ( !isOkay( token, last_type ) )
 		{
 		  if ( token.type == TYP_OPERATOR ) // check for a unary operator that looks the same.
-			recognize_unary( token, token.tokval() );
+			recognize_unary( token, token.tokval()->asAnsi(true).c_str() );
 
 		  if ( !isOkay( token, last_type ) )
 		  {
@@ -2157,7 +2130,7 @@ namespace Pol {
 
 			res = -1;
 			err = PERR_ILLEGALCONS;
-			ctx.s = t; // FIXME operator=
+			//ctx.s = t; // FIXME operator=
             INFO_PRINT << "Token '" << token << "' cannot follow token '" << last_token << "'\n";
 			if ( last_token.type == TYP_OPERAND &&
 				 token.id == TOK_LPAREN )
@@ -2213,7 +2186,7 @@ namespace Pol {
 		  if ( res < 0 )
 		  {
 			delete ptok2;
-			ctx.s = t;
+			//ctx.s = t;
 		  }
 		}
 		else if ( token.type == TYP_FUNC )
@@ -2222,7 +2195,7 @@ namespace Pol {
 		  res = getUserArgs( expr, ctx, false );
 		  if ( res < 0 )
 		  {
-            INFO_PRINT << "Error getting arguments for function " << token.tokval() << "\n"
+            INFO_PRINT << "Error getting arguments for function " << token.tokval()->asAnsi(true) << "\n"
               << ctx << "\n";
 			return res;
 		  }
@@ -2231,7 +2204,7 @@ namespace Pol {
 		  if ( res < 0 )
 		  {
 			delete ptok2;
-			ctx.s = t; // FIXME operator=
+			//ctx.s = t; // FIXME operator=
 
 			if ( ( err == PERR_UNEXRPAREN ) && rightparen_term_allowed )
 			{
@@ -2339,8 +2312,8 @@ namespace Pol {
 
 		  // grab the method name
 		  getToken( ctx, token, &expr );
-          std::string methodName(token.tokval());
-		  Clib::mklower( methodName );
+		  Unicode methodName = Unicode(*token.tokval());
+		  methodName.toLower();
 		  int nargs;
 		  res = getMethodArguments( expr, ctx, nargs );
 		  // our ptok2 is now sitting in TX.  Move it to CA.
@@ -2348,7 +2321,7 @@ namespace Pol {
 		  expr.TX.pop();
 		  expr.CA.push( _t );
 
-		  ObjMethod* objmeth = getKnownObjMethod( methodName.c_str() );
+		  ObjMethod* objmeth = getKnownObjMethod( methodName.asAnsi(true).c_str() );
 		  if ( objmeth != NULL && compilercfg.OptimizeObjectMembers )
 		  {
 			ptok2->id = INS_CALL_METHOD_ID;
@@ -2361,7 +2334,7 @@ namespace Pol {
 			ptok2->id = INS_CALL_METHOD;
 			ptok2->type = TYP_METHOD;
 			ptok2->lval = nargs;
-			ptok2->copyStr( methodName.c_str() );
+			ptok2->copyStr( methodName );
 		  }
 		  last_type = TYP_OPERAND;
 		}
@@ -2375,7 +2348,7 @@ namespace Pol {
 			if ( res < 0 )
 			{
 			  delete ptok2;
-			  ctx.s = t; // FIXME operator=
+			  //ctx.s = t; // FIXME operator=
 
 			  if ( ( err == PERR_UNEXRPAREN ) && rightparen_term_allowed )
 			  {

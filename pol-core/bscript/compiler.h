@@ -109,7 +109,8 @@ namespace Pol {
 
 
 	  int curSourceFile;
-	  char curLine[80];
+	  /** Part of the current line being read, only for info/debug output, limited to 80 chars */
+	  Unicode curLine;
 	  int inExpr;
 	  int inFunction;
 	  bool haveProgram;
@@ -118,7 +119,7 @@ namespace Pol {
 	  unsigned nProgramArgs;
 
 	  CompilerContext program_ctx;
-	  char* program_source;
+	  std::string program_source;
 
       typedef std::set<std::string, Clib::ci_cmp_pred> INCLUDES;
 	  INCLUDES included;
@@ -191,7 +192,7 @@ namespace Pol {
 	  void setIncludeCompileMode() { compiling_include = true; }
 
 	  void addModule( FunctionalityModule* module );
-	  int useModule( const char *modulename );
+	  int useModule( const std::string& modulename );
 	  int includeModule( const std::string& modulename );
 	  virtual int isFunc( Token& tok, ModuleFunction **v ) POL_OVERRIDE;
 	  virtual int isUserFunc( Token& tok, UserFunction **userfunc ) POL_OVERRIDE;
@@ -254,27 +255,24 @@ namespace Pol {
 	  void readCurLine( CompilerContext& ctx );
 	  void savesourceline();
 
-	  int getStatement( CompilerContext& ctx /*char **s */, int level );
-	  int _getStatement( CompilerContext& ctx /*char **s */, int level );
+	  int getStatement( CompilerContext& ctx, int level );
+	  int _getStatement( CompilerContext& ctx, int level );
 
-	  int getFileContents( const char *filename, char **contents );
-	  int compileFile( const char *fname );
+	  int getFileContents( const std::string& filename, char **contents );
+	  int compileFile( const std::string& in_file );
 	  int compileContext( CompilerContext& ctx );
-	  int compile( CompilerContext& ctx /* char *s */ );
+	  int compile( CompilerContext& ctx );
 
-	  int write( const char *fname );
-	  int write_dbg( const char *fname, bool generate_txtfile );
-	  void writeIncludedFilenames( const char* fname ) const;
-	  void divine_options_in_included_file( const char *modulename );
-	  void inner_divine_options( const CompilerContext& ctx );
-	  void divine_options( const CompilerContext& ctx );
+	  int write( const std::string& fname );
+	  int write_dbg( const std::string& fname, bool generate_txtfile );
+	  void writeIncludedFilenames( const std::string& fname ) const;
 
 	  // phase 0: determining bracket syntax
 
 	  // phase 1: read function declarations, constants (but clear constants)
 	  int forward_read_function( CompilerContext& ctx );
 	  bool read_function_declarations( const CompilerContext& ctx );
-	  bool read_function_declarations_in_included_file( const char *modulename );
+	  bool read_function_declarations_in_included_file( const std::string& modulename );
 	  bool inner_read_function_declarations( const CompilerContext& ctx );
 
 	  // phase 2: compile the source
@@ -287,7 +285,6 @@ namespace Pol {
 	  void patch_callers( UserFunction& uf );
 
 	private:
-      std::vector<char*> delete_these_arrays;
 	};
 
   }

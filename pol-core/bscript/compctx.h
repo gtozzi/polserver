@@ -12,6 +12,7 @@ Notes
 
 #include <iosfwd>
 #include "../../lib/format/format.h"
+#include "../clib/unicode.h"
 
 namespace Pol {
   namespace Bscript {
@@ -19,9 +20,9 @@ namespace Pol {
 	{
 	public:
 	  CompilerContext();
-	  CompilerContext( const std::string& filename, int dbg_filenum, const char *s );
+	  CompilerContext( const std::string& filename, int dbg_filenum, const Unicode& s );
 	  CompilerContext( const CompilerContext& );
-	  CompilerContext& operator=( const CompilerContext& );
+	  //CompilerContext& operator=( const CompilerContext& );
 
       void printOn( std::ostream& os ) const;
       void printOn( fmt::Writer& writer ) const;
@@ -31,13 +32,18 @@ namespace Pol {
 	  void skipws();
 	  int skipcomments();
 
-	  const char *s;
+	  /** The code, as string */
+	  const Unicode s;
+	  /** The cursor while reading the code (iterator over characters) */
+	  Unicode::const_iterator cursor;
 	  int line;
 	  std::string filename;
 
-	  const char* s_begin;
-
 	  int dbg_filenum;
+
+	protected:
+	  int eatToCommentEnd();
+	  void eatToEndOfLine();
 	};
 
 	inline std::ostream& operator<<( std::ostream& os, const CompilerContext& ctx )

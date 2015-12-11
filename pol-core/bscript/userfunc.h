@@ -46,7 +46,7 @@ namespace Pol {
 	  Addresses forward_callers;
 
 	  CompilerContext ctx;
-	  char* function_body; // FIXME: this is leaked
+	  Unicode function_body;
 	  bool exported;
 	  bool emitted;
 	  std::string declaration;

@@ -15,86 +15,76 @@ Notes
 namespace Pol {
   namespace Bscript {
 	CompilerContext::CompilerContext() :
-	  s( NULL ),
+	  s(),
+	  cursor( s.begin() ),
 	  line( 1 ),
 	  filename( "" ),
-	  s_begin( NULL ),
 	  dbg_filenum( 0 )
-	{}
+	{
+	}
 
-	CompilerContext::CompilerContext( const std::string& filename, int dbg_filenum, const char *s ) :
+	CompilerContext::CompilerContext( const std::string& filename, int dbg_filenum, const Unicode& s ) :
 	  s( s ),
+	  cursor( s.begin() ),
 	  line( 1 ),
 	  filename( filename ),
-	  s_begin( s ),
 	  dbg_filenum( dbg_filenum )
 	{}
 
 	CompilerContext::CompilerContext( const CompilerContext& ctx ) :
 	  s( ctx.s ),
+	  cursor( ctx.cursor ),
 	  line( ctx.line ),
 	  filename( ctx.filename ),
-	  s_begin( ctx.s_begin ),
 	  dbg_filenum( ctx.dbg_filenum )
 	{}
 
-	CompilerContext& CompilerContext::operator =( const CompilerContext& rhs )
-	{
-	  filename = rhs.filename;
-	  s = rhs.s;
-	  line = rhs.line;
-	  s_begin = rhs.s_begin;
-	  dbg_filenum = rhs.dbg_filenum;
-
-	  return *this;
-	}
-
+	/**
+	 * Skips whitespaces. Moves the cursor forward until a non-whitespace is found
+	 */
 	void CompilerContext::skipws()
 	{
-	  while ( isspace( s[0] ) )
+	  while ( cursor != s.end() && cursor->isSpace() )
 	  {
-		if ( s[0] == '\n' )
+		if ( *cursor == '\n' )
 		  ++line;
-		s++;
+		cursor++;
 	  }
 	}
 
-	int eatToCommentEnd( CompilerContext& ctx );
-	int eatToEndOfLine( CompilerContext& ctx );
-
+	/**
+	 * Skips comments. Looks for a comment start. If found, moves the cursor to the end of it.
+	 *
+	 * @return o an success
+	 */
 	int CompilerContext::skipcomments()
 	{
-	  CompilerContext tctx( *this );
-	  for ( ;; )
+	  // Backup current line and cursor
+	  auto cursor_bck = cursor;
+	  auto line_bck = line;
+
+	  while ( cursor != s.end() && cursor+1 != s.end() )
 	  {
-		while ( tctx.s[0] && isspace( tctx.s[0] ) )
+		if ( *cursor == '/' )
 		{
-		  // FIXME: if (tctx.s[0] == '\t')
-		  // FIXME:     contains_tabs = true;
-		  if ( tctx.s[0] == '\n' )
-			++tctx.line;
-		  tctx.s++; // wow neat, already take care of newlines
-		}
-
-		if ( !tctx.s[0] )
-		{
-		  ( *this ) = tctx;
-		  return 1;
-		}
-
-		// look for comments
-		if ( strncmp( tctx.s, "/*", 2 ) == 0 )		// got a start of comment
-		{
-		  int res;
-		  tctx.s += 2;
-		  res = eatToCommentEnd( tctx );
-		  if ( res ) return res;
-		}
-		else if ( strncmp( tctx.s, "//", 2 ) == 0 ) // comment, one line only
-		{
-		  int res;
-		  res = eatToEndOfLine( tctx );
-		  if ( res ) return res;
+		  if ( cursor[1] == '*' ) // got a start of multiline comment
+		  {
+			cursor += 2;
+			if( eatToCommentEnd() )
+			  return 0;
+			else
+			  break;
+		  }
+		  else if ( cursor[1] == '/' ) // comment, one line only
+		  {
+			cursor += 2;
+			eatToEndOfLine();
+			return 0;
+		  }
+		  else
+		  {
+			break;
+		  }
 		}
 		else
 		{
@@ -102,9 +92,9 @@ namespace Pol {
 		}
 	  }
 
-	  ( *this ) = tctx;
-
-	  return 0;
+	  cursor = cursor_bck;
+	  line = line_bck;
+	  return 1;
 	}
 
 	void CompilerContext::printOn( std::ostream& os ) const
@@ -127,47 +117,49 @@ namespace Pol {
       writer << filename << ", Line " << line << "\n";
     }
 
-
-	int eatToEndOfLine( CompilerContext& ctx )
+	/**
+	 * Skips to the end of the line (or to the end of the file, whathever comes first)
+	 */
+	void CompilerContext::eatToEndOfLine()
 	{
-	  const char *t = ctx.s;
-
-	  while ( *t && ( *t != '\r' ) && ( *t != '\n' ) )
-		t++;
-
-	  ctx.s = t;
-	  return 0;
+	  while( cursor != s.end() )
+	  {
+		if( *(cursor++) == '\n' )
+		  return;
+	  }
 	}
 
-	int eatToCommentEnd( CompilerContext& ctx )
+	/**
+	 * Skips to the end of a multiline comment, moving cursor forward
+	 *
+	 * @note dropped support for nested comments, 12-09-2015 Bodom
+	 * @return 0 on success
+	 */
+	int CompilerContext::eatToCommentEnd()
 	{
-	  CompilerContext tmp( ctx );
+	  // Backup current cursor and line
+	  auto cursor_bck = cursor;
+	  auto line_bck = line;
 
-	  while ( tmp.s[0] )
+	  while ( cursor != s.end() && cursor+1 != s.end() )
 	  {
-		if ( strncmp( tmp.s, "*/", 2 ) == 0 )
+		if ( *cursor == '\n' )
+		  ++line;
+
+		if ( *cursor == '*' && cursor[1] == '/' )
 		{
-		  tmp.s += 2;
-		  ctx = tmp;
+		  cursor += 2;
 		  return 0;
 		}
-		else if ( strncmp( tmp.s, "/*", 2 ) == 0 ) // nested comment
-		{
-		  tmp.s += 2;
-		  int res = eatToCommentEnd( tmp );
-		  if ( res ) return res;
-		}
-		else if ( strncmp( tmp.s, "//", 2 ) == 0 ) // nested eol-comment
-		{
-		  int res = eatToEndOfLine( tmp );
-		  if ( res ) return res;
-		}
-		if ( tmp.s[0] == '\n' )
-		  ++tmp.line;
-		tmp.s++;
+
+		cursor++;
 	  }
+
+	  cursor = cursor_bck;
+	  line = line_bck;
 	  return -1;
 	}
 
   }
+
 }

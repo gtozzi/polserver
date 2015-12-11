@@ -101,8 +101,8 @@ namespace Pol {
 
 	  void dump( std::ostream& os );
 	  void dump_casejmp( std::ostream& os, const Token& token );
-	  int write( const char *fname );
-	  int read( const char *fname );
+	  int write( const std::string& fname );
+	  int read( const std::string& fname );
 	  int read_dbg_file();
 	  int read_progdef_hdr( FILE *fp );
 	  int read_module( FILE* fp );
@@ -111,12 +111,12 @@ namespace Pol {
 	  int _readToken( Token& token, unsigned position ) const;
 	  int create_instructions();
 
-	  int write_dbg( const char *fname, bool gen_txt );
+	  int write_dbg( const std::string& fname, bool gen_txt );
 
 	  // compiler only:
       unsigned program_PC;
       std::string program_decl;
-	  std::vector<std::string> sourcelines;
+	  std::vector<Unicode> sourcelines;
       std::vector<std::string> fileline;
       std::vector<std::string> function_decls;
 

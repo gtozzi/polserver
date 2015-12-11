@@ -21,9 +21,9 @@ namespace Pol {
 	int filesize( const char *fname );
 	unsigned int GetFileTimestamp( const char* fname );
 	void RemoveFile( const std::string& fname );
-	std::string FullPath( const char* filename );
-	std::string GetTrueName( const char* filename );
-	std::string GetFilePart( const char* filename );
+	std::string FullPath( const std::string& filename );
+	std::string GetTrueName( const std::string& filename );
+	std::string GetFilePart( const std::string& filename );
 	std::string normalized_dir_form( const std::string& str );
 	int make_dir( const char *dir ); // recursive
   }

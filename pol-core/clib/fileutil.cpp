@@ -142,25 +142,25 @@ namespace Pol {
 	  unlink( fname.c_str() );
 	}
 
-	std::string FullPath( const char* filename )
+	std::string FullPath( const std::string& filename )
 	{
 #ifdef __unix__
 	  char tmp[ PATH_MAX ];
-	  if (realpath( filename, tmp ))
+	  if (realpath( filename.c_str(), tmp ))
 		return tmp;
 	  else
 		return "";
 #else
 	  char p[1025];
-	  _fullpath( p, filename, sizeof p );
+	  _fullpath( p, filename.c_str(), sizeof p );
 	  return p;
 #endif
 	}
 
-	std::string GetTrueName( const char* filename )
+	std::string GetTrueName( const std::string &filename )
 	{
 	  DirList dl;
-	  dl.open( filename );
+	  dl.open( filename.c_str() );
 	  if( !dl.at_end() )
 	  {
 		return dl.name();
@@ -169,14 +169,13 @@ namespace Pol {
 		return filename;
 	}
 
-	std::string GetFilePart( const char* filename )
+	std::string GetFilePart( const std::string &filename )
 	{
-	  std::string fn( filename );
-      std::string::size_type lastslash = fn.find_last_of("\\/");
+      std::string::size_type lastslash = filename.find_last_of("\\/");
       if (lastslash == std::string::npos)
 		return filename;
 	  else
-		return fn.substr( lastslash + 1 );
+		return filename.substr( lastslash + 1 );
 	}
   }
 }

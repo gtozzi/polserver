@@ -44,7 +44,7 @@ namespace Pol {
 	  position( 0 ),
 	  forward_callers(),
 	  ctx(),
-	  function_body( NULL ),
+	  function_body(),
 	  exported( false ),
 	  emitted( false )
 	{}
