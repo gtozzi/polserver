@@ -5189,6 +5189,10 @@ namespace Pol {
 		}
 	  }
 	}
+
+	/**
+	 * Given a file name, tells if this is a web script
+	 */
 	bool is_web_script( const std::string &file )
 	{
 	  auto flen = file.length();
@@ -5276,7 +5280,12 @@ namespace Pol {
 	  fc.set_contents( output );
 	}
 
-	// getcwd
+	/**
+	 * Here starts the real complation. Reads the given file and process it
+	 *
+	 * @param in_file Path for the file to compile, no more validity checks are done
+	 * @return <0 on error
+	 */
 	int Compiler::compileFile( const std::string &in_file )
 	{
 	  int res = -1;
@@ -5295,7 +5304,7 @@ namespace Pol {
 		}
 
 		CompilerContext ctx( filepath, program->add_dbg_filename( filepath ), fc.contents() );
-		//divine_options( ctx );
+
 		bool bres = read_function_declarations( ctx );
 		// cout << "bres:" << bres << endl;
 		if ( !bres )
