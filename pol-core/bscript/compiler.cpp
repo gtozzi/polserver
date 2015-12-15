@@ -5221,7 +5221,7 @@ namespace Pol {
 	  bool source_is_emit = false;
 	  Unicode s = fc.contents();
 	  Unicode acc;
-	  for( auto itr = s.begin(); itr != s.end; ++itr )
+	  for( auto itr = s.begin(); itr != s.end(); ++itr )
 	  {
 		if ( reading_html )
 		{

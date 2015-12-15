@@ -29,7 +29,8 @@ namespace Pol {
 	  CompilerContext();
 	  CompilerContext( const std::string& filename, int dbg_filenum, const Unicode& s );
 	  CompilerContext( const CompilerContext& );
-	  //CompilerContext& operator=( const CompilerContext& );
+	  /** Not defined, but prevents "warning C4512: 'Pol::Bscript::CompilerContext' : assignment operator could not be generated" */
+	  CompilerContext& operator=( const CompilerContext& ) { assert(false); };
 
       void printOn( std::ostream& os ) const;
       void printOn( fmt::Writer& writer ) const;

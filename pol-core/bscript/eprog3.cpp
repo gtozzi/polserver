@@ -45,7 +45,7 @@ namespace Pol {
 		  if ( function_decls.size() > PC && !function_decls[PC].empty() )
               os << function_decls[PC] << std::endl;
 		  if ( sourcelines.size() > PC && !sourcelines[PC].empty() )
-              os << sourcelines[PC] << std::endl;
+              os << sourcelines[PC].asAnsi(true) << std::endl;
           os << PC << ": " << token << std::endl;
 		  if ( token.id == INS_CASEJMP )
 		  {

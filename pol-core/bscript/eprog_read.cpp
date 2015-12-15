@@ -29,7 +29,7 @@ Notes
 
 namespace Pol {
   namespace Bscript {
-	int EScriptProgram::read( const char *fname )
+	int EScriptProgram::read( const std::string &fname )
 	{
 	  FILE* fp = NULL;
 
@@ -37,7 +37,7 @@ namespace Pol {
 	  {
 		name = fname;
 
-		fp = fopen( fname, "rb" );
+		fp = fopen( fname.c_str(), "rb" );
 		if ( !fp )
 		  throw std::runtime_error( std::string( "Unable to open " ) + fname + " for reading." );
 
@@ -248,7 +248,7 @@ namespace Pol {
 			  throw std::runtime_error( "Symbol offset of " + Clib::decint( dt->strOffset ) + " exceeds symbol store length of " + Clib::decint( symbols.length() ) + " at PC=" + Clib::decint( position ) );
 			  return -1;
 			}
-			if ( dt->strOffset ) token.setStr( symbols.array() + dt->strOffset );
+			if ( dt->strOffset ) token.copyStr( symbols.array() + dt->strOffset );
 		  }
 		  return 0;
 
@@ -291,7 +291,7 @@ namespace Pol {
 			{
 			  throw std::runtime_error( "Symbol offset of " + Clib::decint( st.offset ) + " exceeds symbol store length of " + Clib::decint( symbols.length() ) + " at PC=" + Clib::decint( position ) );
 			}
-			token.setStr( symbols.array() + st.offset );
+			token.copyStr( symbols.array() + st.offset );
 		  }
 		  else if ( token.type == TYP_FUNC )
 		  {
@@ -301,7 +301,7 @@ namespace Pol {
 			// executor only:
 			modfunc = modl->functions.at( token.lval );
 
-			token.setStr( modfunc->name.get().c_str() );
+			token.copyStr( modfunc->name.get().c_str() );
 		  }
 		  return 0;
 
@@ -312,7 +312,7 @@ namespace Pol {
 			{
 			  throw std::runtime_error( "Symbol offset of " + Clib::decint( st.offset ) + " exceeds symbol store length of " + Clib::decint( symbols.length() ) + " at PC=" + Clib::decint( position ) );
 			}
-			token.setStr( symbols.array() + st.offset );
+			token.copyStr( symbols.array() + st.offset );
 		  }
 		  return 0;
 	  }

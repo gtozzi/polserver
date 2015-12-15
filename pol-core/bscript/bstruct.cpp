@@ -39,7 +39,7 @@ namespace Pol {
 	{
 	  for ( const auto &elem : other.contents_ )
 	  {
-		const std::string& key = elem.first;
+		const String& key = elem.first;
 		const BObjectRef& bvalref = elem.second;
 
 		contents_[key] = BObjectRef( new BObject( bvalref->impref().copy() ) );
@@ -136,7 +136,7 @@ namespace Pol {
 	  BObject m_StructObj;
 	  BStruct* m_pStruct;
 	  BObjectRef m_IterVal;
-      std::string key;
+      String key;
 	  bool m_First;
 	};
 	BStructIterator::BStructIterator( BStruct* pStruct, BObject* pIterVal ) :
@@ -189,9 +189,9 @@ namespace Pol {
       size_t size = sizeof( BStruct );
 	  for ( const auto &elem : contents_ )
 	  {
-		const std::string& bkey = elem.first;
+		const String& bkey = elem.first;
 		const BObjectRef& bvalref = elem.second;
-        size += bkey.capacity( ) + bvalref.sizeEstimate( ) + ( sizeof(void*)* 3 + 1 ) / 2;
+        size += bkey.sizeEstimate() + bvalref.sizeEstimate( ) + ( sizeof(void*)* 3 + 1 ) / 2;
 	  }
 	  return size;
 	}
@@ -412,7 +412,7 @@ namespace Pol {
 	  os << packtype() << contents_.size() << ":";
 	  for ( const auto& content : contents_ )
 	  {
-		const std::string& key = content.first;
+		const String& key = content.first;
 		const BObjectRef& bvalref = content.second;
 
 		String::packonto( os, key );

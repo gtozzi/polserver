@@ -46,23 +46,43 @@ namespace Pol {
   class UnicodeChar
   {
   public:
+    /**
+     * This triviall default constructible
+     * @warning Using this constructor leaves the internal character container uninitialized
+     */
+    UnicodeChar() = default;
     UnicodeChar( const char16_t c );
-    bool operator==( const char16_t c ) const;
+
+    //   ------------------------------- OPERATORS ----------------------------------------------
+    inline bool operator==( const char16_t c ) const { return val_ == c; };
+    inline bool operator==( const UnicodeChar &c ) const { return val_ == c.val_; };
+    inline bool operator<=( const UnicodeChar &c ) const { return val_ <= c.val_; };
+    inline bool operator>=( const UnicodeChar &c ) const { return val_ >= c.val_; };
+    inline bool operator<( const UnicodeChar &c ) const { return val_ < c.val_; };
+    inline bool operator>( const UnicodeChar &c ) const { return val_ > c.val_; };
+    inline UnicodeChar& operator+=( const UnicodeChar &c ) { val_ += c.val_; return *this; };
+    inline UnicodeChar& operator-=( const UnicodeChar &c ) { val_ -= c.val_; return *this; };
 
     //operator char16_t();
     //operator wchar_t();
 
     u8 getByteLen() const;
     char32_t asUtf32() const;
-    char16_t asUtf16() const;
+    /** Returns an UTF16 representation */
+    inline char16_t asUtf16( ) const { return val_; };
     char asAnsi( const bool failsafe = false ) const;
 
-    bool isSpace() const;
-    bool isDigit() const;
-    bool isAlpha() const;
+    /** Tells wether this is a space character */
+    inline bool isSpace() const { return isspace(val_) == 0; };
+    /** Tells wether this is a digit character */
+    inline bool isDigit() const { return isdigit(val_) == 0; };
+    /** Tells wether this is an alphabetic character */
+    inline bool isAlpha() const { return isalpha(val_) == 0; };
+
+    void toLower();
+    void toUpper();
 
   private:
-    UnicodeChar();
     char16_t val_;
   };
 
@@ -83,15 +103,30 @@ namespace Pol {
    */
   class Unicode : public std::basic_string<UnicodeChar>
   {
+  private:
+    typedef std::basic_string<UnicodeChar> base;
+
   public:
-    Unicode& operator+=( const char16_t c );
-    Unicode& operator+=( const UnicodeChar &c );
-    Unicode& operator+=( const Unicode &s );
-    Unicode& operator+=( const char* s );
-    Unicode& operator=( const Unicode &c );
-    Unicode& operator=( const char* s );
-    Unicode& operator+( const Unicode &c );
-    bool operator==( const char c ) const;
+    Unicode( const char* s ) { *this += s; };
+    Unicode( const std::string& s ) { *this += s; };
+    Unicode( const std::string& s, size_t pos, size_t n ) { base(Unicode(s), pos, n); };
+
+    //   ------------------------------- OPERATORS ----------------------------------------------
+    inline Unicode& operator=( const char16_t c )  { UnicodeChar uc = UnicodeChar(c); assign(&uc); return *this; };
+    inline Unicode& operator+=( const char16_t c ) { UnicodeChar uc = UnicodeChar(c); append(&uc); return *this; };
+    inline Unicode& operator=( const UnicodeChar& c )  { assign(&c); return *this; };
+    inline Unicode& operator+=( const UnicodeChar& c ) { append(&c); return *this; };
+    inline Unicode& operator=( const Unicode& s )  { assign(s); return *this; };
+    inline Unicode& operator+=( const Unicode& s ) { append(s); return *this; };
+    inline Unicode& operator=( const char* s )  { while( *s++ != '\0' ){ UnicodeChar uc = UnicodeChar(*s); assign(&uc); } return *this; };
+    inline Unicode& operator+=( const char* s ) { while( *s++ != '\0' ){ UnicodeChar uc = UnicodeChar(*s); append(&uc); } return *this; };
+    inline Unicode operator+( const char16_t c ) const { Unicode res(*this); res += c; return res; };
+    inline Unicode operator+( const UnicodeChar& c ) const { Unicode res(*this); res += c; return res; };
+    inline Unicode operator+( const Unicode& s ) const { Unicode res(*this); res += s; return res; };
+    inline Unicode operator+( const char* s ) const { Unicode res(*this); res += s; return res; };
+
+    inline bool Unicode::operator==( const char16_t c ) const { return size() == 1 && front() == c; };
+
     int compare( const char* s ) const;
     int compare( size_t pos, size_t len, const char* s ) const;
 
@@ -119,7 +154,7 @@ namespace Pol {
 
   protected:
     Utf8Char( const char* c );
-    bool operator==( const char c ) const;
+    inline bool operator==( const char c ) const { return bytes_.size() == 1 && bytes_[0] == c; };
 
   private:
     Utf8Char();

@@ -11,7 +11,6 @@ Notes
 #include "unicode.h"
 #include "endian.h"
 
-#include <boost/algorithm/string/case_conv.hpp>
 
 namespace Pol {
   namespace Clib {
@@ -75,11 +74,6 @@ namespace Pol {
     }
   }
 
-  bool Utf8Char::operator==( const char c ) const
-  {
-    return bytes_.size() == 1 && bytes_[0] == c;
-  }
-
   /**
    * Returns number of bytes represented by this utf8 char
    */
@@ -94,6 +88,9 @@ namespace Pol {
         ret++;
       else
         return ret;
+
+    assert(false); // should never reach this point
+    return 0;
   }
 
    /**
@@ -135,7 +132,7 @@ namespace Pol {
         return 0xFFFD;
       else
         return 0;
-    return out;
+    return static_cast<char16_t>(out);
   }
 
   /**
@@ -152,7 +149,7 @@ namespace Pol {
         return '?';
       else
         return 0;
-    return out;
+    return static_cast<char>(out);
   }
 
 
@@ -164,11 +161,6 @@ namespace Pol {
   {
   }
 
-  bool UnicodeChar::operator==( const char16_t c ) const
-  {
-    return val_ == c;
-  }
-
   /**
    * Returns minumum number of bytes this char can fit in
    */
@@ -177,14 +169,6 @@ namespace Pol {
     if( val_ > 0xFF )
       return 2;
     return 1;
-  }
-
-  /**
-   * Returns an UTF16 representation
-   */
-  char16_t UnicodeChar::asUtf16( ) const
-  {
-    return val_;
   }
 
   /**
@@ -200,43 +184,29 @@ namespace Pol {
         return '?';
       else
         return 0;
-    return val_;
+    return static_cast<char>(val_);
   }
 
   /**
-   * Tells wether this is a space character
+   * Convert this char to lowercase, if possible
    */
-  bool UnicodeChar::isSpace() const
+  void UnicodeChar::toLower()
   {
-    return isspace(val_);
+    wchar_t c = towlower(val_);
+    if( c > 0 && c <= 0xFFFF )
+      val_ = static_cast<char16_t>(c);
   }
 
   /**
-   * Tells wether this is a digit character
+   * Convert this char to uppercase, if possible
    */
-  bool UnicodeChar::isDigit() const
+  void UnicodeChar::toUpper()
   {
-    return isdigit(val_);
+    wchar_t c = towupper(val_);
+    if( c > 0 && c <= 0xFFFF )
+      val_ = static_cast<char16_t>(c);
   }
 
-  /**
-   * Tells wether this is an alphabetic character
-   */
-  bool UnicodeChar::isAlpha() const
-  {
-    return isalpha(val_);
-  }
-
-
-  Unicode& Unicode::operator+=( const char c )
-  {
-    append(&UnicodeChar(c));
-    return *this;
-  }
-  bool Unicode::operator==( const char c ) const
-  {
-    return size() == 1 && front() == c;
-  }
 
   /**
    * Makes an ANSI string representation of this Unicode object, when possible
@@ -286,7 +256,8 @@ namespace Pol {
    */
   void Unicode::toLower()
   {
-    boost::to_lower(this);
+    for( auto itr = this->begin(); itr != this->end(); ++itr )
+      itr->toLower();
   }
 
   /**lowercase in-place
@@ -294,7 +265,8 @@ namespace Pol {
    */
   void Unicode::toUpper()
   {
-    boost::to_upper(this);
+    for( auto itr = this->begin(); itr != this->end(); ++itr )
+      itr->toUpper();
   }
 
 

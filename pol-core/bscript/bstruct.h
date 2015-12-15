@@ -17,6 +17,7 @@ Notes
 #endif
 
 #include "../clib/maputil.h"
+#include "../clib/unicode.h"
 
 #include <map>
 #include <iosfwd>
@@ -38,7 +39,7 @@ namespace Pol {
 
 	  size_t mapcount() const;
 
-	  typedef std::map<std::string, BObjectRef, Clib::ci_cmp_pred> Contents;
+	  typedef std::map<String, BObjectRef, Clib::ci_cmp_pred> Contents;
 	  const Contents& contents() const;
 
 	protected:

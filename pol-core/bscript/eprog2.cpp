@@ -125,12 +125,12 @@ namespace Pol {
 								symbols.append( token.dval, sympos );
 								break;
 							  case TOK_STRING: // string literal
-								symbols.append( token.tokval(), sympos );
+								symbols.append( token.tokval()->asAnsi(true).c_str(), sympos );
 								break;
 							  case INS_ADDMEMBER2:
 							  case INS_ADDMEMBER_ASSIGN:
 							  case TOK_IDENT:  // unclassified (ick)
-								symbols.append( token.tokval(), sympos );
+								symbols.append( token.tokval()->asAnsi(true).c_str(), sympos );
 								break;
 							  case TOK_GLOBALVAR:
 							  case TOK_LOCALVAR:
@@ -155,7 +155,7 @@ namespace Pol {
 						   unsigned sympos = 0;
 						   passert( token.tokval() );
 
-						   symbols.append( token.tokval(), sympos );
+						   symbols.append( token.tokval()->asAnsi(true).c_str(), sympos );
 
 						   tokens.append_tok(
 							 StoredToken( token.module,
@@ -183,7 +183,7 @@ namespace Pol {
 					   if ( include_debug )
 					   {
 						 if ( token.tokval() )
-						   symbols.append( token.tokval(), sympos );
+						   symbols.append( token.tokval()->asAnsi(true).c_str(), sympos );
 					   }
 					   tokens.append_tok(
 						 StoredToken( token.module,
@@ -213,7 +213,7 @@ namespace Pol {
 					token.id == INS_SET_MEMBER_CONSUME )
 		  {
 			unsigned sympos = 0;
-			symbols.append( token.tokval(), sympos );
+			symbols.append( token.tokval()->asAnsi(true).c_str(), sympos );
 			tokens.append_tok(
 			  StoredToken( token.module,
 			  token.id,
@@ -253,7 +253,7 @@ namespace Pol {
 			case INS_POP_PARAM:
 			{
 								unsigned sympos = 0;
-								symbols.append( token.tokval(), sympos );
+								symbols.append( token.tokval()->asAnsi(true).c_str(), sympos );
 								tokens.append_tok( StoredToken( token.module, token.id, token.type, sympos ) );
 			}
 			  break;
