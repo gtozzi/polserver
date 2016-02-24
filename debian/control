@@ -1,0 +1,17 @@
+Source: pol
+Section: unknown
+Priority: optional
+Maintainer: The POL Development Team <polteam@polserver.com>
+Build-Depends: debhelper (>= 9), cmake
+Standards-Version: 3.9.6
+Homepage: http://www.polserver.com
+Vcs-Git: https://github.com/polserver/polserver.git
+Vcs-Browser: https://github.com/polserver/polserver.git
+
+Package: pol
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: A MMO server, compatible with most Ultima Online clients.
+ PenUltima Online (POL) is a MMO server, compatible with most Ultima Online
+ clients. POL is customizable via configuration files and has its own scripting
+ language (eScript).
