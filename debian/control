@@ -1,16 +1,17 @@
 Source: pol
-Section: unknown
+Section: misc
 Priority: optional
 Maintainer: The POL Development Team <polteam@polserver.com>
-Build-Depends: debhelper (>= 9), cmake
+Build-Depends: debhelper (>= 9), cmake, zlib1g-dev, libmysqlclient-dev
 Standards-Version: 3.9.6
 Homepage: http://www.polserver.com
 Vcs-Git: https://github.com/polserver/polserver.git
 Vcs-Browser: https://github.com/polserver/polserver.git
 
 Package: pol
-Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Architecture: i386 amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, zlib1g, libmysqlclient,
+  libstdc++6, libc6, libgomp1, libgcc1
 Description: A MMO server, compatible with most Ultima Online clients.
  PenUltima Online (POL) is a MMO server, compatible with most Ultima Online
  clients. POL is customizable via configuration files and has its own scripting
