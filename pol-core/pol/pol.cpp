@@ -1131,7 +1131,7 @@ namespace Pol {
     Clib::MakeDirectory( "log" );
 
     POLLOG_INFO << POL_VERSION_ID << " - " << POL_BUILD_TARGET
-      << "\ncompiled on " << POL_BUILD_DATE << " " << POL_BUILD_TIME
+      << "\ncompiled on " << POL_BUILD_DATETIME
       << "\nCopyright (C) 1993-2016 Eric N. Swanson"
       << "\n\n";
 
@@ -1316,9 +1316,21 @@ namespace Pol {
     {
       DEINIT_STARTLOG();
     }
-    POLLOG.Format( "{0:s} ({1:s}) compiled on {2:s} {3:s} running.\n" ) << POL_VERSION_ID << POL_BUILD_TARGET << POL_BUILD_DATE << POL_BUILD_TIME;
+    POLLOG.Format( "{0:s} ({1:s}) compiled on {2:s} running.\n" ) << POL_VERSION_ID << POL_BUILD_TARGET << POL_BUILD_DATETIME;
     //if( 1 )
     {
+      if ( Plib::systemstate.config.multithread == 0 ) {
+        POLLOG_INFO <<
+          "\n"
+          "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+          "WARNING: Threading is disabled (Multithread==0 in pol.cfg).    \n"
+          "         This setting is deprecated and will be removed from   \n"
+          "         the next version of POL. It may not even work now!    \n"
+          "         Only use this option if you really know what you are  \n"
+          "         doing. And you probably don't.                        \n"
+          "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n"
+          "\n";
+      }
       POLLOG_INFO << "Game is active.\n";
     }
     Core::CoreSetSysTrayToolTip( "Running", Core::ToolTipPrioritySystem );

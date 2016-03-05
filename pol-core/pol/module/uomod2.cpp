@@ -103,6 +103,7 @@
 #include "../realms.h"
 #include "../scrsched.h"
 #include "../scrstore.h"
+#include "../sngclick.h"
 #include "../sockio.h"
 #include "../statmsg.h"
 #include "../syshook.h"
@@ -1854,8 +1855,7 @@ namespace Pol {
 	  LONG_COREVAR( instr_per_min, stateManager.profilevars.last_sipm );
 	  LONG_COREVAR( priority_divide, scriptEngineInternalManager.priority_divide );
 	  if ( stricmp( corevar, "verstr" ) == 0 ) return new String( POL_VERSION_ID );
-	  if ( stricmp( corevar, "compiledate" ) == 0 ) return new String( POL_BUILD_DATE );
-	  if ( stricmp( corevar, "compiletime" ) == 0 ) return new String( POL_BUILD_TIME );
+	  if ( stricmp( corevar, "compiledatetime" ) == 0 ) return new String( POL_BUILD_DATETIME );
 	  if ( stricmp( corevar, "packages" ) == 0 ) return GetPackageList();
 	  if ( stricmp( corevar, "running_scripts" ) == 0 ) return GetRunningScriptList();
 	  if ( stricmp( corevar, "all_scripts" ) == 0 ) return GetAllScriptList();
@@ -2698,5 +2698,21 @@ namespace Pol {
 	  return new BLong( 0 );
 	}
 
+	BObjectImp* UOExecutorModule::mf_SingleClick() {
+		Character* chr = nullptr;
+		UObject* what = nullptr;
+
+		if (!getCharacterParam(exec, 0, chr) || !getUObjectParam(exec, 1, what)) 
+			return new BError("Invalid parameter");
+
+		if (!chr->has_active_client())
+			return new BError("Mobile has no active client");
+
+		// If it got here, clear any errors from getUObjectParam/getCharacterParam
+		exec.setFunctionResult(nullptr);
+
+		singleclick(chr->client, what->serial);
+		return new BLong(1);
+	}
   }
 }

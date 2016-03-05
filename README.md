@@ -42,7 +42,7 @@ Minimum compiler version: Visual Studio 2012 (Express editions might require the
 Compiling in Linux
 ----------
 
-Make sure you have the required libraries installed: boost, zlib and the mysql client (if SQL supported is desired).
+Make sure you have the required libraries installed: boost, zlib, tinyxml and the mysql client (if SQL supported is desired).
 Boost libraries are also shipped with the source. If you choose to use the provided version, unpack them with:
 * `cd lib`
 * `tar xjf boost_1_55_0.tar.bz2`
@@ -93,6 +93,8 @@ Keep in mind that even when set this way, the option will be saved in the `CMake
 
 You can now use the classic *make* command to compile the POL. You can type:
 * `make` or `make all` to do the build
-* `make clean` to delete all the intermediate build files
 
 You will find the compiled files inside the `bin/` folder.
+
+To delete intermediate build files and clean the folder you can use the
+interective clean.py script.
